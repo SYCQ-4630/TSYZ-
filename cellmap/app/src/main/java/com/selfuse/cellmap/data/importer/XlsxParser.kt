@@ -420,6 +420,25 @@ class XlsxParser {
             failures.clear()
         }
 
+        private fun resolveSystem(
+            systemRaw: String?,
+            bandRaw: String?,
+            cellName: String?,
+            siteName: String?,
+            category: String?
+        ): NetworkSystem? {
+            NetworkSystem.explicit(systemRaw)?.let { return it }
+            NetworkSystem.explicit(bandRaw)?.let { return it }
+            val inferred = NetworkSystem.fromBand(systemRaw) ?: NetworkSystem.fromBand(bandRaw)
+            val context = listOfNotNull(cellName, siteName, category).joinToString(" ")
+            val hinted = NetworkSystem.explicit(context)
+            return when {
+                inferred == null -> hinted
+                hinted != null && NetworkSystem.isAmbiguousBand(systemRaw ?: bandRaw) -> hinted
+                else -> inferred
+            }
+        }
+
         private fun buildDraft(values: Map<Int, String>): StationDraft {
             fun raw(field: StationField): String? {
                 val column = mapping[field] ?: return null
@@ -437,11 +456,6 @@ class XlsxParser {
                 ?: throw RowFailure("缺少基站 ID")
             val cellId = raw(StationField.CELL_ID)
                 ?: throw RowFailure("缺少小区 ID")
-            val system = Normalizer.system(raw(StationField.SYSTEM))
-                ?: throw RowFailure("制式无法识别为 4G/5G")
-            if (system !in listOf(NetworkSystem.FOUR_G, NetworkSystem.FIVE_G)) {
-                throw RowFailure("制式无法识别为 4G/5G")
-            }
 
             val builder = raw(StationField.BUILDER)
             val operator = raw(StationField.OPERATOR)
@@ -449,6 +463,11 @@ class XlsxParser {
             val district = raw(StationField.DISTRICT)
             val cellName = raw(StationField.CELL_NAME)
             val siteName = raw(StationField.SITE_NAME)
+            val category = raw(StationField.CATEGORY)
+            val systemRaw = raw(StationField.SYSTEM)
+            val bandRaw = raw(StationField.BAND)
+            val system = resolveSystem(systemRaw, bandRaw, cellName, siteName, category)
+                ?: throw RowFailure("频段/制式无法识别为 4G/5G")
 
             return StationDraft(
                 lat = lat,
@@ -460,8 +479,8 @@ class XlsxParser {
                 stationId = stationId,
                 cellName = cellName,
                 cellId = cellId,
-                category = raw(StationField.CATEGORY),
-                band = raw(StationField.BAND),
+                category = category,
+                band = bandRaw ?: systemRaw?.takeIf { NetworkSystem.fromBand(it) != null },
                 siteName = siteName,
                 shared = shared,
                 antennaHeight = raw(StationField.ANTENNA_HEIGHT),
@@ -601,28 +620,83 @@ fun columnIndex(reference: String?): Int {
 }
 
 object ColumnMapping {
+    private val systemAliases = StationField.SYSTEM.aliases.map { Normalizer.normalizeHeader(it) }
+    private val bandAliases = StationField.BAND.aliases.map { Normalizer.normalizeHeader(it) }
+
+    /**
+     * 先映射其他字段，再单独处理「制式/频段」：优先「制式」列；没有时把「频段」列同时
+     * 用作制式识别来源。这样表头只写「频段」的台账也能自动对齐，且频段原始值仍会保存。
+     */
     fun autoDetect(header: List<String>): Map<StationField, Int> {
         val normalized = header.map { Normalizer.normalizeHeader(it) }
         val used = mutableSetOf<Int>()
         val result = linkedMapOf<StationField, Int>()
-        StationField.entries.forEach { field ->
-            val aliases = field.aliases.map { Normalizer.normalizeHeader(it) }
-            val exact = normalized.indices.firstOrNull { idx ->
-                !used.contains(idx) && aliases.any { it == normalized[idx] }
-            }
-            val fuzzy = if (exact != null) null else normalized.indices.firstOrNull { idx ->
-                val value = normalized[idx]
-                !used.contains(idx) && value.isNotBlank() && aliases.any {
-                    it.isNotBlank() && (value.contains(it) || it.contains(value))
+
+        StationField.entries
+            .filter { it != StationField.SYSTEM && it != StationField.BAND }
+            .forEach { field ->
+                findColumn(normalized, field.aliases, used)?.let { index ->
+                    result[field] = index
+                    used.add(index)
                 }
             }
-            val index = exact ?: fuzzy ?: return@forEach
-            used.add(index)
-            result[field] = index
+
+        val systemIndex = findExact(normalized, systemAliases, used)
+            ?: findFuzzy(normalized, systemAliases, used)
+        if (systemIndex != null) {
+            result[StationField.SYSTEM] = systemIndex
+            used.add(systemIndex)
         }
+
+        val bandIndex = findExact(normalized, bandAliases, used)
+            ?: findFuzzy(normalized, bandAliases, used)
+            ?: systemIndex?.takeIf { isFrequencyHeader(normalized.getOrNull(it)) }
+        if (bandIndex != null) {
+            result[StationField.BAND] = bandIndex
+        }
+
         return result
     }
 
     fun missingRequired(mapping: Map<StationField, Int>): List<StationField> =
         StationField.entries.filter { it.required && !mapping.containsKey(it) }
+
+    private fun findColumn(
+        normalized: List<String>,
+        aliases: List<String>,
+        used: Set<Int>
+    ): Int? {
+        val normalizedAliases = aliases.map { Normalizer.normalizeHeader(it) }
+        return findExact(normalized, normalizedAliases, used)
+            ?: findFuzzy(normalized, normalizedAliases, used)
+    }
+
+    private fun findExact(normalized: List<String>, aliases: List<String>, used: Set<Int>): Int? {
+        aliases.forEach { alias ->
+            val index = normalized.indices.firstOrNull { idx ->
+                idx !in used && normalized[idx].isNotBlank() && normalized[idx] == alias
+            }
+            if (index != null) return index
+        }
+        return null
+    }
+
+    private fun findFuzzy(normalized: List<String>, aliases: List<String>, used: Set<Int>): Int? {
+        aliases.forEach { alias ->
+            val index = normalized.indices.firstOrNull { idx ->
+                val value = normalized[idx]
+                !used.contains(idx) && value.isNotBlank() && alias.isNotBlank() &&
+                    (value.contains(alias) || alias.contains(value))
+            }
+            if (index != null) return index
+        }
+        return null
+    }
+
+    private fun isFrequencyHeader(header: String?): Boolean {
+        val value = header ?: return false
+        return bandAliases.any { alias ->
+            alias.isNotBlank() && (value == alias || value.contains(alias))
+        }
+    }
 }

@@ -34,6 +34,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,6 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -57,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -353,18 +356,47 @@ fun MapScreen(onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val chipColors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        labelColor = MaterialTheme.colorScheme.onSurface,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                    val chipElevation = FilterChipDefaults.filterChipElevation(3.dp)
                     FilterChip(
                         selected = state.system == NetworkSystem.FOUR_G,
                         onClick = { vm.setSystem(NetworkSystem.FOUR_G) },
-                        label = { Text("4G") }
+                        label = { Text("4G") },
+                        shape = FilterChipDefaults.shape,
+                        colors = chipColors,
+                        elevation = chipElevation,
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = state.system == NetworkSystem.FOUR_G,
+                            borderColor = MaterialTheme.colorScheme.outline,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary,
+                            borderWidth = 1.dp,
+                            selectedBorderWidth = 1.dp
+                        )
                     )
                     FilterChip(
                         selected = state.system == NetworkSystem.FIVE_G,
                         onClick = { vm.setSystem(NetworkSystem.FIVE_G) },
-                        label = { Text("5G") }
+                        label = { Text("5G") },
+                        shape = FilterChipDefaults.shape,
+                        colors = chipColors,
+                        elevation = chipElevation,
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = state.system == NetworkSystem.FIVE_G,
+                            borderColor = MaterialTheme.colorScheme.outline,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary,
+                            borderWidth = 1.dp,
+                            selectedBorderWidth = 1.dp
+                        )
                     )
                     Spacer(Modifier.weight(1f))
-                    OutlinedButton(onClick = { showFilters = true }) {
+                    Button(onClick = { showFilters = true }) {
                         Icon(Icons.Filled.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(
@@ -432,10 +464,11 @@ private fun SearchBar(
     onChange: (String) -> Unit,
     onClear: () -> Unit
 ) {
+    val shape = RoundedCornerShape(14.dp)
     OutlinedTextField(
         value = query,
         onValueChange = onChange,
-        placeholder = { Text("搜索小区名称 / 基站 ID / 小区 ID") },
+        placeholder = { Text("搜索小区 / 基站 ID / 小区 ID") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (searching) {
@@ -447,7 +480,21 @@ private fun SearchBar(
             }
         },
         singleLine = true,
-        modifier = Modifier.fillMaxWidth()
+        shape = shape,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            cursorColor = MaterialTheme.colorScheme.primary
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(6.dp, shape, clip = false)
     )
 }
 
@@ -492,7 +539,7 @@ private fun MapStatusCard(state: MapUiState, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         tonalElevation = 3.dp,
         shadowElevation = 3.dp
     ) {

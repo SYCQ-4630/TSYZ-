@@ -55,16 +55,16 @@ sdk.dir=/path/to/Android/Sdk
 | 基站 ID | 基站标识 |
 | 小区 ID | 小区标识 |
 | 是否共享 | 已共享 / 未共享，用于圆点与方块区分 |
-| 制式 | 4G / 5G |
+| 频段/制式 | 4G / 5G，或 1.8G / 2.1G / 900M / 800M / 3.5G / 2.6G 等频段写法 |
 
-可选列包括基站名称、小区名称、运营商、所属区县、频段、覆盖类别、天线总挂高、45G 共设备等。表头支持常见别名与模糊匹配，导入前可手动调整映射。
+可选列包括基站名称、小区名称、运营商、所属区县、频段明细、覆盖类别、天线总挂高、45G 共设备等。表头支持常见别名与模糊匹配；只有「频段」列时该列会同时用于识别 4G/5G，导入前可手动调整映射。
 
 同一「基站 ID + 小区 ID」重复导入会被忽略。
 
 ## 技术要点
 
 - Kotlin + Jetpack Compose + Material 3，MVVM + Repository，Coroutines/Flow
-- Room 业务表、R-Tree 空间索引与 FTS4 搜索表同事务写入
+- Room 业务表与空间索引表同事务写入；不依赖 SQLite 可选模块
 - XLSX 使用平台 SAX 直接解析 OOXML，流式按批写入，不构建工作簿对象
 - 地图使用 MapLibre，符号图层绘制四色标记，聚合图层分级展示
 - 后台任务使用前台 Worker 与通知，支持进度、取消与失败重试
@@ -85,6 +85,7 @@ app/src/main/java/com/selfuse/cellmap/
 ## 说明
 
 - 已在 JDK 17 + Android SDK 35 下通过 `./gradlew assembleDebug`，调试包位于 `dist/cellmap-debug.apk`。
+- 识别逻辑单元测试：`./gradlew testDebugUnitTest`（覆盖 4G/5G 显式词条、频段写法与表头映射）。
 - MapLibre 13.7.1 的 arm64-v8a / x86_64 原生库按 16KB 页对齐，可在 Android 15 及以上 16KB 页设备运行。
 - 地图依赖使用 MapLibre `android-sdk-opengl`（OpenGL ES），规避部分设备 Vulkan 驱动初始化失败；地图初始化延迟到地图页，失败时显示错误页而不是闪退。
 - 空间索引使用普通表 + B-Tree，不依赖 SQLite `rtree`/`fts4` 可选模块；部分 Android 17 系统 SQLite 未编译这些模块，虚拟表会导致建库失败并闪退。

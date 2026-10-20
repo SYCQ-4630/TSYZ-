@@ -19,14 +19,81 @@ enum class NetworkSystem(val label: String) {
     FIVE_G("5G");
 
     companion object {
-        fun fromRaw(raw: String?): NetworkSystem? {
-            val value = raw?.trim()?.uppercase() ?: return null
+        private val fiveGPatterns = listOf(
+            Regex("""5G|NR|NR5G|5GNR"""),
+            Regex("""(?<![A-Z0-9])N(?:1|3|5|8|28|41|78|79)(?![0-9])""")
+        )
+        private val fourGPatterns = listOf(
+            Regex("""4G|LTE|FDD|TDD"""),
+            Regex("""(?<![A-Z0-9])B(?:1|3|5|8|34|39|40|41)(?![0-9])""")
+        )
+        private val lteBand = Regex("""L(?:TE)?[\s_-]?(\d{3,4})""")
+        private val nrBand = Regex("""NR[\s_-]?(\d{3,4})""")
+        private val numericBand = Regex("""(\d+(?:\.\d+)?)\s*(GHZ|G|MHZ|M)""")
+
+        /**
+         * 兼容「4G/5G」写法，也兼容只有频率的台账（1.8G、2.1G、900M、3.5G、800M 等）。
+         * 同一频率可能同时用于 4G/5G，优先使用显式制式；无法区分时按主流代际归类，
+         * 调用方可用小区名称中的 4G/5G 字样覆盖该结果。
+         */
+        fun fromRaw(raw: String?): NetworkSystem? = explicit(raw) ?: fromBand(raw)
+
+        fun explicit(raw: String?): NetworkSystem? {
+            val value = normalize(raw) ?: return null
             return when {
-                value.contains("5G") || value.contains("NR") -> FIVE_G
-                value.contains("4G") || value.contains("LTE") -> FOUR_G
+                fiveGPatterns.any { it.containsMatchIn(value) } -> FIVE_G
+                fourGPatterns.any { it.containsMatchIn(value) } -> FOUR_G
                 else -> null
             }
         }
+
+        fun isAmbiguousBand(raw: String?): Boolean {
+            val value = normalize(raw) ?: return false
+            val mhz = bandMhz(value) ?: return false
+            return mhz in 790..960 || mhz in 1900..2200 || mhz in 2300..2400
+        }
+
+        fun fromBand(raw: String?): NetworkSystem? {
+            val value = normalize(raw) ?: return null
+            lteBand.find(value)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return FOUR_G }
+            nrBand.find(value)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let { return FIVE_G }
+            val mhz = bandMhz(value) ?: return null
+            return when (mhz) {
+                in 3300..3800 -> FIVE_G
+                in 4800..5000 -> FIVE_G
+                in 2500..2690 -> FIVE_G
+                in 700..790 -> FIVE_G
+                in 790..960 -> FOUR_G
+                in 1700..1900 -> FOUR_G
+                in 1900..2200 -> FOUR_G
+                in 2300..2400 -> FOUR_G
+                else -> null
+            }
+        }
+
+        private fun bandMhz(value: String): Int? {
+            numericBand.find(value)?.let { match ->
+                val number = match.groupValues[1].toDoubleOrNull() ?: return null
+                val unit = match.groupValues[2]
+                return when (unit) {
+                    "GHZ", "G" -> (number * 1000).toInt()
+                    else -> number.toInt()
+                }
+            }
+            val bare = value.toDoubleOrNull()
+            if (bare != null) {
+                return when {
+                    bare in 0.6..6.0 -> (bare * 1000).toInt()
+                    bare in 600.0..6000.0 -> bare.toInt()
+                    else -> null
+                }
+            }
+            return null
+        }
+
+        private fun normalize(raw: String?): String? =
+            raw?.trim()?.uppercase()?.replace(" ", "")?.replace("　", "")
+                ?.replace("／", "/")?.takeIf { it.isNotBlank() }
     }
 }
 
@@ -99,12 +166,12 @@ enum class StationField(val displayName: String, val required: Boolean, val alia
     CELL_NAME("小区名称", false, listOf("小区名称", "小区名", "cellname")),
     CELL_ID("小区 ID", true, listOf("小区id", "小区编号", "小区标识", "cellid", "localcellid")),
     CATEGORY("覆盖类别", false, listOf("覆盖类别", "覆盖类型", "category")),
-    BAND("频段", false, listOf("频段", "band", "frequency")),
+    BAND("频段明细", false, listOf("频段", "频率", "频段号", "band", "frequency")),
     SITE_NAME("站址名称", false, listOf("站址名称", "站址", "站点名称", "sitename")),
     SHARED("是否共享", true, listOf("是否共享", "共享", "共享状态", "isshared", "shared")),
     ANTENNA_HEIGHT("天线总挂高", false, listOf("天线总挂高", "挂高", "天线高度", "antennaheight")),
     CO_DEVICE_45G("45G 共设备", false, listOf("45g共设备", "共设备", "45g", "codevice")),
-    SYSTEM("制式", true, listOf("制式", "网络制式", "系统", "system", "networktype"));
+    SYSTEM("频段/制式", true, listOf("制式", "网络制式", "系统", "网络类型", "频段", "频率", "system", "networktype", "band", "frequency"));
 
     companion object {
         fun fromName(name: String?): StationField? = entries.firstOrNull { it.name == name }
