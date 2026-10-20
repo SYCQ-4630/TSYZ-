@@ -84,7 +84,8 @@ app/src/main/java/com/selfuse/cellmap/
 
 ## 说明
 
-- 当前开发环境未安装 JDK 与 Android SDK，源码尚未执行 Gradle 编译；首次构建请确认依赖下载与 KSP 代码生成正常。
+- 已在 JDK 17 + Android SDK 35 下通过 `./gradlew assembleDebug`，调试包位于 `dist/cellmap-debug.apk`。
+- MapLibre 13.7.1 的 arm64-v8a / x86_64 原生库按 16KB 页对齐，可在 Android 15 及以上 16KB 页设备运行。
 - 项目仅自用，不上架应用商店。
 - Key 与天地图瓦片不随应用分发。
 - 修改数据后需重新执行标注与压缩优化，地图才会使用新数据集。
