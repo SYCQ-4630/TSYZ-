@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D372D282-3674-425B-B680-3B7993FA6DDF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DingTalkChatExporter.Core", "src\DingTalkChatExporter.Core\DingTalkChatExporter.Core.csproj", "{7B97ADA7-AACF-4B0D-A8F6-B16880A0990E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DingTalkChatExporter.DataSources", "src\DingTalkChatExporter.DataSources\DingTalkChatExporter.DataSources.csproj", "{7E14D4D2-5B5D-445F-B835-ABC52123C546}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DingTalkChatExporter.Export", "src\DingTalkChatExporter.Export\DingTalkChatExporter.Export.csproj", "{5AF10C41-B442-4359-ABE7-29DD7E43DFD7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DingTalkChatExporter.App", "src\DingTalkChatExporter.App\DingTalkChatExporter.App.csproj", "{2B150C81-1EFC-4999-A471-F1BF0ADB0D5C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{EF52E05E-7C74-40B9-ADBD-462EF5508C1A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DingTalkChatExporter.Tests", "tests\DingTalkChatExporter.Tests\DingTalkChatExporter.Tests.csproj", "{1682D3F9-5C70-4B84-B372-D9E0B060A385}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7B97ADA7-AACF-4B0D-A8F6-B16880A0990E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B97ADA7-AACF-4B0D-A8F6-B16880A0990E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B97ADA7-AACF-4B0D-A8F6-B16880A0990E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B97ADA7-AACF-4B0D-A8F6-B16880A0990E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E14D4D2-5B5D-445F-B835-ABC52123C546}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E14D4D2-5B5D-445F-B835-ABC52123C546}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E14D4D2-5B5D-445F-B835-ABC52123C546}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E14D4D2-5B5D-445F-B835-ABC52123C546}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5AF10C41-B442-4359-ABE7-29DD7E43DFD7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5AF10C41-B442-4359-ABE7-29DD7E43DFD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5AF10C41-B442-4359-ABE7-29DD7E43DFD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5AF10C41-B442-4359-ABE7-29DD7E43DFD7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2B150C81-1EFC-4999-A471-F1BF0ADB0D5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B150C81-1EFC-4999-A471-F1BF0ADB0D5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2B150C81-1EFC-4999-A471-F1BF0ADB0D5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2B150C81-1EFC-4999-A471-F1BF0ADB0D5C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1682D3F9-5C70-4B84-B372-D9E0B060A385}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1682D3F9-5C70-4B84-B372-D9E0B060A385}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1682D3F9-5C70-4B84-B372-D9E0B060A385}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1682D3F9-5C70-4B84-B372-D9E0B060A385}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{7B97ADA7-AACF-4B0D-A8F6-B16880A0990E} = {D372D282-3674-425B-B680-3B7993FA6DDF}
+		{7E14D4D2-5B5D-445F-B835-ABC52123C546} = {D372D282-3674-425B-B680-3B7993FA6DDF}
+		{5AF10C41-B442-4359-ABE7-29DD7E43DFD7} = {D372D282-3674-425B-B680-3B7993FA6DDF}
+		{2B150C81-1EFC-4999-A471-F1BF0ADB0D5C} = {D372D282-3674-425B-B680-3B7993FA6DDF}
+		{1682D3F9-5C70-4B84-B372-D9E0B060A385} = {EF52E05E-7C74-40B9-ADBD-462EF5508C1A}
+	EndGlobalSection
+EndGlobal

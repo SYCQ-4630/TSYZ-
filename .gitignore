@@ -32,3 +32,12 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# .NET build output
+bin/
+obj/
+dist/
+.vs/
+*.user
+*.suo
+TestResults/

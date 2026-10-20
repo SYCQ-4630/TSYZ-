@@ -1,0 +1,265 @@
+<UserControl x:Class="DingTalkChatExporter.App.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{StaticResource PageBackgroundBrush}">
+    <UserControl.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,10,0,4" />
+            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+        </Style>
+        <Style x:Key="HintStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="32,26,32,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="设置" Style="{StaticResource PageTitleStyle}" />
+                <TextBlock Text="所有开关只影响本工具的读取与导出行为，不会写入钉钉。"
+                           Style="{StaticResource PageDescriptionStyle}" />
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Content="重新加载"
+                    Command="{Binding ReloadCommand}"
+                    VerticalAlignment="Bottom" />
+        </Grid>
+
+        <Border Grid.Row="1" Margin="0,16,0,0" Style="{StaticResource CardStyle}" Padding="14,9">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding StatusMessage}"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource SecondaryTextBrush}" />
+                <ProgressBar Grid.Column="1"
+                             IsIndeterminate="True"
+                             Width="100"
+                             Height="3"
+                             VerticalAlignment="Center"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Style="{StaticResource CardStyle}" Padding="20,16">
+                    <StackPanel>
+                        <TextBlock Text="数据源" Style="{StaticResource SectionTitleStyle}" />
+                        <TextBlock Text="dws 是首选只读数据源；FlaUI 仅在明确启用后作为实验性降级方案。"
+                                   Style="{StaticResource HintStyle}"
+                                   Margin="0,4,0,0" />
+
+                        <TextBlock Text="dws 可执行文件（留空从 PATH 查找）" Style="{StaticResource LabelStyle}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding DwsExecutablePath, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Column="1" Content="浏览…" Command="{Binding BrowseDwsCommand}" Margin="6,0,0,0" />
+                        </Grid>
+
+                        <TextBlock Text="路由策略" Style="{StaticResource LabelStyle}" />
+                        <ComboBox ItemsSource="{Binding Strategies}"
+                                  SelectedItem="{Binding SelectedStrategy}"
+                                  DisplayMemberPath="Name"
+                                  MaxWidth="360"
+                                  HorizontalAlignment="Left" />
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button Content="检查数据源" Command="{Binding CheckDataSourcesCommand}" VerticalAlignment="Top" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding DataSourceCheckResult}"
+                                       Margin="14,0,0,0"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource SecondaryTextBrush}" />
+                        </Grid>
+
+                        <TextBlock Text="FlaUI 降级（实验性）" FontSize="12" FontWeight="SemiBold" Margin="0,18,0,0" />
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,10,0">
+                                <TextBlock Text="进程名" Style="{StaticResource LabelStyle}" />
+                                <TextBox Text="{Binding FlaUiProcessName, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                <TextBlock Text="采集模式" Style="{StaticResource LabelStyle}" />
+                                <ComboBox ItemsSource="{Binding CaptureModes}"
+                                          SelectedItem="{Binding SelectedCaptureMode}"
+                                          DisplayMemberPath="Name" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="0,0,10,0">
+                                <TextBlock Text="最大滚动屏数" Style="{StaticResource LabelStyle}" />
+                                <TextBox Text="{Binding FlaUiMaxScrollScreens, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="3">
+                                <TextBlock Text="滚动间隔（毫秒）" Style="{StaticResource LabelStyle}" />
+                                <TextBox Text="{Binding FlaUiScrollIntervalMs, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Grid>
+                        <CheckBox Content="FlaUI 抓取时隐藏本应用窗口"
+                                  IsChecked="{Binding FlaUiHideOwnWindow}"
+                                  Margin="0,10,0,0" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                            <Button Content="保存数据源" Command="{Binding SaveDataSourcesCommand}" Margin="0,0,8,0" />
+                            <Button Content="恢复默认" Command="{Binding ResetDataSourcesCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Padding="20,16" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="功能开关" Style="{StaticResource SectionTitleStyle}" />
+                        <TextBlock Text="高风险开关默认关闭；启用时会再次确认。"
+                                   Style="{StaticResource HintStyle}"
+                                   Margin="0,4,0,0" />
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <CheckBox Content="允许 FlaUI 降级（实验性，高风险）"
+                                          IsChecked="{Binding AllowFlaUiFallback}"
+                                          Margin="0,5" />
+                                <CheckBox Content="FlaUI 抓取时隐藏窗口（高风险）"
+                                          IsChecked="{Binding HideAppDuringFlaUiCapture}"
+                                          Margin="0,5" />
+                                <CheckBox Content="启用增量读取水位"
+                                          IsChecked="{Binding EnableIncrementalRead}"
+                                          Margin="0,5" />
+                                <CheckBox Content="导出前备份已有输出文件"
+                                          IsChecked="{Binding BackupBeforeExport}"
+                                          Margin="0,5" />
+                                <CheckBox Content="导出时高亮低置信度单元格"
+                                          IsChecked="{Binding HighlightLowConfidenceInExport}"
+                                          Margin="0,5" />
+                                <CheckBox Content="导出完成后打开文件夹"
+                                          IsChecked="{Binding OpenFolderAfterExport}"
+                                          Margin="0,5" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <CheckBox Content="预览中标记低置信度"
+                                          IsChecked="{Binding HighlightLowConfidenceInPreview}"
+                                          Margin="0,5" />
+                                <CheckBox Content="允许规则库实时测试"
+                                          IsChecked="{Binding LiveRuleTesting}"
+                                          Margin="0,5" />
+                                <CheckBox Content="自动保存快照"
+                                          IsChecked="{Binding EnableAutoSnapshot}"
+                                          Margin="0,5" />
+                                <CheckBox Content="快照中保存预览消息"
+                                          IsChecked="{Binding SnapshotPreviewResults}"
+                                          Margin="0,5" />
+                                <CheckBox Content="完成时播放提示音"
+                                          IsChecked="{Binding PlaySoundOnComplete}"
+                                          Margin="0,5" />
+                                <CheckBox Content="完成时闪烁任务栏"
+                                          IsChecked="{Binding FlashTaskbarOnComplete}"
+                                          Margin="0,5" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="日志级别" Style="{StaticResource LabelStyle}" />
+                        <ComboBox ItemsSource="{Binding LogLevels}"
+                                  SelectedItem="{Binding SelectedLogLevel}"
+                                  DisplayMemberPath="Name"
+                                  MaxWidth="260"
+                                  HorizontalAlignment="Left" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                            <Button Content="保存功能开关" Command="{Binding SaveFeaturesCommand}" Margin="0,0,8,0" />
+                            <Button Content="恢复默认" Command="{Binding ResetFeaturesCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Padding="20,16" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="外观" Style="{StaticResource SectionTitleStyle}" />
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="240" />
+                                <ColumnDefinition Width="240" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Text="主题" Style="{StaticResource LabelStyle}" />
+                                <ComboBox ItemsSource="{Binding Themes}"
+                                          SelectedItem="{Binding SelectedTheme}"
+                                          DisplayMemberPath="Name" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                <TextBlock Text="字号" Style="{StaticResource LabelStyle}" />
+                                <ComboBox ItemsSource="{Binding FontScales}"
+                                          SelectedItem="{Binding SelectedFontScale}"
+                                          DisplayMemberPath="Name" />
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="保存外观" Command="{Binding SaveUiCommand}" Margin="0,0,8,0" />
+                            <Button Content="恢复默认" Command="{Binding ResetUiCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Padding="20,16" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="存储与日志" Style="{StaticResource SectionTitleStyle}" />
+                        <TextBlock Text="数据目录" Style="{StaticResource LabelStyle}" />
+                        <TextBox Text="{Binding DataDirectory}" IsReadOnly="True" />
+                        <TextBlock Text="日志目录" Style="{StaticResource LabelStyle}" />
+                        <TextBox Text="{Binding LogsDirectory}" IsReadOnly="True" />
+                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                            <Button Content="打开数据目录" Command="{Binding OpenDataDirectoryCommand}" Margin="0,0,8,0" />
+                            <Button Content="打开日志目录" Command="{Binding OpenLogsDirectoryCommand}" Margin="0,0,8,0" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding VersionText, StringFormat=应用版本 {0} · 只读：不修改钉钉数据}"
+                                   Margin="0,12,0,0"
+                                   Style="{StaticResource HintStyle}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

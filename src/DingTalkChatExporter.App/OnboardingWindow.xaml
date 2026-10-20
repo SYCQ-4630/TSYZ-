@@ -1,0 +1,96 @@
+<Window x:Class="DingTalkChatExporter.App.OnboardingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="首次使用向导"
+        Width="660"
+        Height="500"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Microsoft YaHei UI, Segoe UI"
+        Background="{StaticResource PageBackgroundBrush}">
+    <Grid Margin="32,26,32,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="欢迎使用钉钉聊天记录导出工具" Style="{StaticResource PageTitleStyle}" />
+            <TextBlock Text="{Binding StepLabel}"
+                       Margin="0,8,0,0"
+                       FontSize="12"
+                       Foreground="{StaticResource SecondaryTextBrush}" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,22,0,0">
+            <Border Background="{StaticResource CardBackgroundBrush}"
+                    BorderBrush="{StaticResource CardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="24,20">
+                <Grid>
+                    <StackPanel Visibility="{Binding IsFirstStep, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="只读、可恢复、数据留在本机" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Margin="0,14,0,0"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   LineHeight="22"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Text="本工具通过官方 dws 只读命令读取消息，不会解密钉钉数据库，也不会向钉钉写入任何内容。&#10;&#10;快照、规则库、表格索引和导出统计分别保存在独立文件中。移除表格默认只从列表移除，Excel 文件仍保留在磁盘上。&#10;&#10;如需实验性降级，可在设置中手动启用 FlaUI；该功能默认关闭。" />
+                    </StackPanel>
+
+                    <StackPanel Visibility="{Binding IsSecondStep, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="检查数据源" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Margin="0,12,0,0"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Text="首选数据源是官方 dws CLI。请确认它已安装并完成登录。检查不会触发登录，也不会写入钉钉。" />
+                        <Button Content="立即检查"
+                                Command="{Binding CheckDataSourcesCommand}"
+                                HorizontalAlignment="Left"
+                                Margin="0,14,0,0" />
+                        <TextBlock Text="{Binding CheckResult}"
+                                   Margin="0,14,0,0"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   LineHeight="20"
+                                   Foreground="{StaticResource SecondaryTextBrush}" />
+                    </StackPanel>
+
+                    <StackPanel Visibility="{Binding IsThirdStep, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="准备就绪" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock Margin="0,14,0,0"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   LineHeight="22"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
+                                   Text="建议按以下顺序使用：在“会话与快照”抓取群聊 → 在“规则库”配置字段 → 在“表格管理”导入模板并建立索引 → 在“导出”预检并生成 Excel。&#10;&#10;之后可随时在“设置”中调整数据源、功能开关与外观。" />
+                        <TextBlock Text="数据目录" FontSize="11" Margin="0,16,0,4"
+                                   Foreground="{StaticResource SecondaryTextBrush}" />
+                        <TextBox Text="{Binding DataDirectory}" IsReadOnly="True" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource SecondaryTextBrush}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="跳过" Command="{Binding SkipCommand}" Margin="0,0,8,0" />
+                <Button Content="上一步" Command="{Binding BackCommand}" Margin="0,0,8,0" />
+                <Button Content="下一步" Command="{Binding NextCommand}" Margin="0,0,8,0" />
+                <Button Content="开始使用" Command="{Binding FinishCommand}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

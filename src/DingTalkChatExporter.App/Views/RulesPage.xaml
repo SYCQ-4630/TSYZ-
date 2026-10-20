@@ -1,0 +1,233 @@
+<UserControl x:Class="DingTalkChatExporter.App.Views.RulesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:DingTalkChatExporter.App.ViewModels"
+             Background="{StaticResource PageBackgroundBrush}">
+    <UserControl.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="32,26,32,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="规则库" Style="{StaticResource PageTitleStyle}" />
+                <TextBlock Text="regex 命中为高置信度，keyword 命中为低置信度；规则只会返回原文中的内容。"
+                           Style="{StaticResource PageDescriptionStyle}" />
+            </StackPanel>
+            <TextBlock Grid.Column="1"
+                       Text="{Binding StatusMessage}"
+                       VerticalAlignment="Bottom"
+                       MaxWidth="420"
+                       TextWrapping="Wrap"
+                       FontSize="11"
+                       Foreground="{StaticResource SecondaryTextBrush}" />
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,20,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="268" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Padding="12" Margin="0,0,12,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Margin="2,0,0,10">
+                        <Button Content="新建" Command="{Binding CreateLibraryCommand}" Margin="0,0,6,0" />
+                        <Button Content="复制" Command="{Binding DuplicateLibraryCommand}" Margin="0,0,6,0" />
+                        <Button Content="删除" Command="{Binding DeleteLibraryCommand}" />
+                    </StackPanel>
+
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding Libraries}"
+                             SelectedItem="{Binding SelectedLibrary, Mode=TwoWay}"
+                             BorderThickness="0"
+                             Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:RuleLibrarySummary}">
+                                <StackPanel Margin="2,4">
+                                    <TextBlock Text="{Binding Display}" FontSize="12" FontWeight="Medium" />
+                                    <TextBlock Text="{Binding Subtitle}"
+                                               FontSize="10"
+                                               Margin="0,2,0,0"
+                                               Foreground="{StaticResource SecondaryTextBrush}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Button Grid.Row="2"
+                            Content="设为默认"
+                            Margin="0,10,0,0"
+                            HorizontalAlignment="Left"
+                            Command="{Binding SetDefaultCommand}"
+                            IsEnabled="{Binding HasSelection}" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="20,16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel IsEnabled="{Binding HasSelection}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="名称" VerticalAlignment="Center" Margin="0,0,10,0"
+                                       Foreground="{StaticResource SecondaryTextBrush}" />
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding EditingName, UpdateSourceTrigger=PropertyChanged}"
+                                     Margin="0,0,16,0" />
+                            <CheckBox Grid.Column="2"
+                                      Content="默认规则库"
+                                      IsChecked="{Binding IsDefault}"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,16,0" />
+                            <Button Grid.Column="3" Content="保存" Command="{Binding SaveLibraryCommand}" />
+                        </Grid>
+
+                        <TextBlock Text="字段规则"
+                                   Style="{StaticResource SectionTitleStyle}"
+                                   Margin="0,22,0,8" />
+                        <DataGrid ItemsSource="{Binding Rules}"
+                                  SelectedItem="{Binding SelectedRule}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="{StaticResource CardBorderBrush}"
+                                  MinHeight="220"
+                                  MaxHeight="320"
+                                  RowHeaderWidth="0"
+                                  FontSize="12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="字段名"
+                                                    Binding="{Binding FieldName, UpdateSourceTrigger=PropertyChanged}"
+                                                    Width="150" />
+                                <DataGridTemplateColumn Header="匹配类型" Width="110">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding DataContext.MatchTypes, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                      SelectedItem="{Binding MatchType, UpdateSourceTrigger=PropertyChanged}"
+                                                      BorderThickness="0"
+                                                      Background="Transparent" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="模式 / 正则"
+                                                    Binding="{Binding Pattern, UpdateSourceTrigger=PropertyChanged}"
+                                                    Width="*" />
+                                <DataGridTextColumn Header="捕获组"
+                                                    Binding="{Binding GroupIndex, UpdateSourceTrigger=PropertyChanged}"
+                                                    Width="70" />
+                                <DataGridTemplateColumn Header="" Width="60">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="移除"
+                                                    Padding="8,2"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Command="{Binding DataContext.RemoveRuleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="添加规则" Command="{Binding AddRuleCommand}" Margin="0,0,8,0" />
+                            <TextBlock Text="regex 使用 .NET 正则，捕获组从 1 开始；keyword 模式会返回包含关键词的片段。"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{StaticResource SecondaryTextBrush}" />
+                        </StackPanel>
+
+                        <TextBlock Text="本地规则测试"
+                                   Style="{StaticResource SectionTitleStyle}"
+                                   Margin="0,24,0,8" />
+                        <TextBox Text="{Binding TestText, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="64"
+                                 VerticalScrollBarVisibility="Auto" />
+                        <Button Content="测试当前规则"
+                                Command="{Binding TestRulesCommand}"
+                                HorizontalAlignment="Left"
+                                Margin="0,8,0,8" />
+                        <DataGrid ItemsSource="{Binding TestResults}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  HeadersVisibility="Column"
+                                  MaxHeight="160"
+                                  RowHeaderWidth="0"
+                                  FontSize="12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="字段" Binding="{Binding FieldName}" Width="150" />
+                                <DataGridTextColumn Header="类型" Binding="{Binding MatchType}" Width="90" />
+                                <DataGridTextColumn Header="结果" Binding="{Binding Value}" Width="*" />
+                                <DataGridTextColumn Header="置信度" Binding="{Binding ConfidenceText}" Width="80" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <TextBlock Text="版本历史（最近 5 版）"
+                                   Style="{StaticResource SectionTitleStyle}"
+                                   Margin="0,24,0,8" />
+                        <ItemsControl ItemsSource="{Binding Versions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:RuleVersionRow}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding SavedAt}" FontSize="11" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Summary}"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{StaticResource SecondaryTextBrush}" />
+                                        <Button Grid.Column="2"
+                                                Content="恢复"
+                                                Padding="10,2"
+                                                Command="{Binding DataContext.RestoreVersionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>
