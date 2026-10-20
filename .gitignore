@@ -36,7 +36,6 @@ google-services.json
 # .NET build output
 bin/
 obj/
-dist/
 .vs/
 *.user
 *.suo
