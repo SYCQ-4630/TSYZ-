@@ -267,9 +267,9 @@ private fun OverviewTab(
                         "电池白名单",
                         if (state.system.batteryWhitelisted) "已加入" else "未加入"
                     )
-                    KeyValueRow("R-Tree 基站", Formats.number(state.system.rtreeCount))
+                    KeyValueRow("空间索引基站", Formats.number(state.system.rtreeCount))
                     KeyValueRow("业务表基站", Formats.number(state.system.stationCountForRtree))
-                    KeyValueRow("R-Tree 优化点", Formats.number(state.system.optimizedRtreeCount))
+                    KeyValueRow("空间索引优化点", Formats.number(state.system.optimizedRtreeCount))
                     KeyValueRow("优化点表", Formats.number(state.system.optimizedMarkerCount.toLong()))
                 }
             }
@@ -335,7 +335,7 @@ private fun DataTab(
                     Text("维护操作", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "修复索引会重建 station_rtree 与 optimized_rtree；压缩优化不会覆盖原始标注数据，可随时回退。",
+                        "修复索引会重建基站与优化点的空间索引；压缩优化不会覆盖原始标注数据，可随时回退。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -345,7 +345,7 @@ private fun DataTab(
                             onClick = onRepair,
                             enabled = !state.busy,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("修复 R-Tree 索引") }
+                        ) { Text("修复空间索引") }
                         OutlinedButton(
                             onClick = onOptimize,
                             enabled = !state.busy && state.readiness.labelReady,

@@ -38,11 +38,11 @@ class DataMaintenanceRepository(
         logger.log(
             LogModule.DATA,
             LogLevel.INFO,
-            "R-Tree 索引已重建",
+            "空间索引已重建",
             "station=${counts.first} optimized=${counts.second}"
         )
         counts
     }.onFailure {
-        logger.log(LogModule.DATA, LogLevel.ERROR, "重建 R-Tree 失败", it.message)
+        logger.log(LogModule.DATA, LogLevel.ERROR, "重建空间索引失败", it.message)
     }
 }

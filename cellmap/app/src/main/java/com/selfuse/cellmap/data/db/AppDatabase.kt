@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
@@ -16,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OptimizedClusterEntity::class,
         OptimizedChunkEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,7 +25,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun stationDao(): StationDao
     abstract fun importBatchDao(): ImportBatchDao
     abstract fun spatialIndexDao(): SpatialIndexDao
-    abstract fun stationFtsDao(): StationFtsDao
     abstract fun logDao(): LogDao
     abstract fun optimizationDao(): OptimizationDao
 
@@ -38,34 +38,70 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "cellmap.db")
+                .addMigrations(MIGRATION_1_2)
+                .fallbackToDestructiveMigration(true)
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
-                        createVirtualTables(db)
+                        createIndexTables(db)
                     }
 
                     override fun onOpen(db: SupportSQLiteDatabase) {
-                        createVirtualTables(db)
+                        createIndexTables(db)
                     }
                 })
                 .build()
 
         /**
-         * R-Tree 与 FTS 都是 SQLite 虚表，Room 不把它们建模成 Entity。
-         * 两者都在 onOpen 中以 IF NOT EXISTS 兜底，保证升级/恢复后仍存在。
+         * 部分 Android 17 设备的系统 SQLite 未编译 rtree/fts4 模块，虚拟表会直接抛
+         * "no such module"，导致建库事务失败并在启动时闪退。这里改用普通表 + B-Tree 索引，
+         * 功能等价且不依赖任何可选 SQLite 模块。
          */
-        private fun createVirtualTables(db: SupportSQLiteDatabase) {
+        private fun createIndexTables(db: SupportSQLiteDatabase) {
             db.execSQL(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS station_rtree " +
-                    "USING rtree(id, minLat, maxLat, minLon, maxLon)"
+                "CREATE TABLE IF NOT EXISTS station_rtree (" +
+                    "id INTEGER PRIMARY KEY NOT NULL, " +
+                    "minLat REAL NOT NULL, maxLat REAL NOT NULL, " +
+                    "minLon REAL NOT NULL, maxLon REAL NOT NULL)"
             )
             db.execSQL(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS optimized_rtree " +
-                    "USING rtree(id, minLat, maxLat, minLon, maxLon)"
+                "CREATE INDEX IF NOT EXISTS index_station_rtree_lat ON station_rtree(minLat, maxLat)"
             )
             db.execSQL(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS station_fts " +
-                    "USING fts4(searchText, tokenize=unicode61)"
+                "CREATE INDEX IF NOT EXISTS index_station_rtree_lon ON station_rtree(minLon, maxLon)"
             )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS optimized_rtree (" +
+                    "id INTEGER PRIMARY KEY NOT NULL, " +
+                    "minLat REAL NOT NULL, maxLat REAL NOT NULL, " +
+                    "minLon REAL NOT NULL, maxLon REAL NOT NULL)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_optimized_rtree_lat ON optimized_rtree(minLat, maxLat)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_optimized_rtree_lon ON optimized_rtree(minLon, maxLon)"
+            )
+        }
+
+        private fun rebuildIndexTables(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "INSERT OR REPLACE INTO station_rtree(id, minLat, maxLat, minLon, maxLon) " +
+                    "SELECT id, lat, lat, lon, lon FROM stations"
+            )
+            db.execSQL(
+                "INSERT OR REPLACE INTO optimized_rtree(id, minLat, maxLat, minLon, maxLon) " +
+                    "SELECT id, lat, lat, lon, lon FROM optimized_markers"
+            )
+        }
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS station_rtree")
+                db.execSQL("DROP TABLE IF EXISTS optimized_rtree")
+                db.execSQL("DROP TABLE IF EXISTS station_fts")
+                createIndexTables(db)
+                rebuildIndexTables(db)
+            }
         }
     }
 }

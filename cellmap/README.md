@@ -87,6 +87,7 @@ app/src/main/java/com/selfuse/cellmap/
 - 已在 JDK 17 + Android SDK 35 下通过 `./gradlew assembleDebug`，调试包位于 `dist/cellmap-debug.apk`。
 - MapLibre 13.7.1 的 arm64-v8a / x86_64 原生库按 16KB 页对齐，可在 Android 15 及以上 16KB 页设备运行。
 - 地图依赖使用 MapLibre `android-sdk-opengl`（OpenGL ES），规避部分设备 Vulkan 驱动初始化失败；地图初始化延迟到地图页，失败时显示错误页而不是闪退。
+- 空间索引使用普通表 + B-Tree，不依赖 SQLite `rtree`/`fts4` 可选模块；部分 Android 17 系统 SQLite 未编译这些模块，虚拟表会导致建库失败并闪退。
 - 启动步骤、未捕获异常和系统退出原因会写入 `Download/cellmap-diagnostics.txt`，便于反馈问题。
 - 项目仅自用，不上架应用商店。
 - Key 与天地图瓦片不随应用分发。

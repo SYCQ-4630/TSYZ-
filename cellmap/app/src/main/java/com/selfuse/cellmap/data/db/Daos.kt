@@ -103,10 +103,10 @@ interface ImportBatchDao {
 @Dao
 interface SpatialIndexDao {
 
-    @Query("INSERT INTO station_rtree(id, minLat, maxLat, minLon, maxLon) VALUES(:id, :lat, :lat, :lon, :lon)")
+    @Query("INSERT OR REPLACE INTO station_rtree(id, minLat, maxLat, minLon, maxLon) VALUES(:id, :lat, :lat, :lon, :lon)")
     suspend fun insertStationPoint(id: Long, lat: Double, lon: Double)
 
-    @Query("INSERT INTO optimized_rtree(id, minLat, maxLat, minLon, maxLon) VALUES(:id, :lat, :lat, :lon, :lon)")
+    @Query("INSERT OR REPLACE INTO optimized_rtree(id, minLat, maxLat, minLon, maxLon) VALUES(:id, :lat, :lat, :lon, :lon)")
     suspend fun insertOptimizedPoint(id: Long, lat: Double, lon: Double)
 
     @Query("SELECT COUNT(*) FROM station_rtree")
@@ -121,31 +121,14 @@ interface SpatialIndexDao {
     @Query("DELETE FROM station_rtree")
     suspend fun clearStationRTree()
 
-    @Query("INSERT INTO station_rtree(id, minLat, maxLat, minLon, maxLon) SELECT id, lat, lat, lon, lon FROM stations")
+    @Query("INSERT OR REPLACE INTO station_rtree(id, minLat, maxLat, minLon, maxLon) SELECT id, lat, lat, lon, lon FROM stations")
     suspend fun rebuildStationRTree()
 
     @Query("DELETE FROM optimized_rtree")
     suspend fun clearOptimizedRTree()
 
-    @Query("INSERT INTO optimized_rtree(id, minLat, maxLat, minLon, maxLon) SELECT id, lat, lat, lon, lon FROM optimized_markers")
+    @Query("INSERT OR REPLACE INTO optimized_rtree(id, minLat, maxLat, minLon, maxLon) SELECT id, lat, lat, lon, lon FROM optimized_markers")
     suspend fun rebuildOptimizedRTree()
-}
-
-@SkipQueryVerification
-@Dao
-interface StationFtsDao {
-
-    @Query("INSERT INTO station_fts(rowid, searchText) VALUES(:rowId, :text)")
-    suspend fun insert(rowId: Long, text: String)
-
-    @Query("DELETE FROM station_fts WHERE rowid IN (SELECT id FROM stations WHERE batchId = :batchId)")
-    suspend fun deleteForBatch(batchId: Long)
-
-    @Query("DELETE FROM station_fts")
-    suspend fun clear()
-
-    @Query("SELECT rowid FROM station_fts WHERE station_fts MATCH :query LIMIT :limit")
-    suspend fun searchIds(query: String, limit: Int): List<Long>
 }
 
 @Dao

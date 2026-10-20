@@ -80,10 +80,10 @@ object RiskDetector {
             risks += RiskItem(
                 id = "rtree_mismatch",
                 level = RiskLevel.HIGH,
-                title = "R-Tree 索引与业务表不同步",
-                description = "stations=${input.stationCountForRtree}，station_rtree=${input.rtreeCount}。",
+                title = "空间索引与业务表不同步",
+                description = "stations=${input.stationCountForRtree}，空间索引=${input.rtreeCount}。",
                 impact = "视口查询可能漏点或返回已删除点位。",
-                suggestion = "在管理页执行“修复索引”，重建 R-Tree。",
+                suggestion = "在管理页执行“修复索引”，重建空间索引。",
                 action = RiskAction.REPAIR_INDEX
             )
         }

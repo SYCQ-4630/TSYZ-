@@ -9,7 +9,6 @@ import com.selfuse.cellmap.core.model.NetworkSystem
 import com.selfuse.cellmap.core.model.SearchHit
 import com.selfuse.cellmap.core.model.ViewportSnapshot
 import com.selfuse.cellmap.core.util.GeoBounds
-import com.selfuse.cellmap.core.util.SearchText
 import com.selfuse.cellmap.data.db.AppDatabase
 import com.selfuse.cellmap.data.db.OptimizedMarkerEntity
 import com.selfuse.cellmap.data.db.StationEntity
@@ -60,20 +59,8 @@ class StationRepository(private val db: AppDatabase) {
         limit: Int = 30
     ): List<SearchHit> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        val ftsQuery = SearchText.ftsQuery(query) ?: return@withContext emptyList()
-        val (where, args) = buildFilters(filters, "s", system, includeSystem = true)
-        val ftsSql = buildString {
-            append("SELECT s.* FROM stations s JOIN station_fts ON station_fts.rowid = s.id ")
-            append("WHERE station_fts MATCH ? ")
-            if (where.isNotBlank()) append("AND ").append(where).append(' ')
-            append("ORDER BY s.id LIMIT ?")
-        }
-        val ftsArgs = (listOf<Any?>(ftsQuery) + args + limit).toTypedArray()
-        val rows = runCatching {
-            db.stationDao().rawQuery(SimpleSQLiteQuery(ftsSql, ftsArgs))
-        }.getOrElse {
-            likeSearch(query, system, filters, limit)
-        }
+        val rows = runCatching { likeSearch(query, system, filters, limit) }
+            .getOrDefault(emptyList())
         rows.mapNotNull { station ->
             val style = MarkerStyle.fromKey(station.markerStyle)
             SearchHit(

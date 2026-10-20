@@ -30,14 +30,13 @@ data class StationDraft(
 data class BatchWriteResult(val inserted: Int, val duplicates: Int)
 
 /**
- * 业务表、R-Tree、FTS 永远在同一个 Room 事务中写入或删除。
+ * 业务表与空间索引表永远在同一个 Room 事务中写入或删除。
  * 单条异常由调用方吞掉并计入失败行，不会中断整批。
  */
 class StationWriter(private val db: AppDatabase) {
 
     private val stationDao = db.stationDao()
     private val spatial = db.spatialIndexDao()
-    private val fts = db.stationFtsDao()
 
     suspend fun insertBatch(batchId: Long, drafts: List<StationDraft>, now: Long): BatchWriteResult =
         db.withTransaction {
@@ -77,9 +76,6 @@ class StationWriter(private val db: AppDatabase) {
                     inserted++
                     val entity = entities[index]
                     spatial.insertStationPoint(id, entity.lat, entity.lon)
-                    if (entity.searchBlob.isNotBlank()) {
-                        fts.insert(id, entity.searchBlob)
-                    }
                 } else {
                     duplicates++
                 }
@@ -105,7 +101,6 @@ class StationWriter(private val db: AppDatabase) {
 
     suspend fun deleteBatch(batchId: Long) {
         db.withTransaction {
-            fts.deleteForBatch(batchId)
             spatial.deleteStationForBatch(batchId)
             stationDao.deleteBatch(batchId)
         }
@@ -113,7 +108,6 @@ class StationWriter(private val db: AppDatabase) {
 
     suspend fun clearAllData() {
         db.withTransaction {
-            fts.clear()
             spatial.clearStationRTree()
             db.clearAllTables()
         }
