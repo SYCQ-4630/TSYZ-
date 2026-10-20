@@ -1,5 +1,7 @@
 package com.selfuse.cellmap.ui.map
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.graphics.PointF
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -70,7 +72,9 @@ import com.selfuse.cellmap.core.model.MarkerStyle
 import com.selfuse.cellmap.core.model.NetworkSystem
 import com.selfuse.cellmap.core.util.Formats
 import com.selfuse.cellmap.data.db.StationEntity
+import com.selfuse.cellmap.diagnostics.CrashDiagnostics
 import com.selfuse.cellmap.map.GeoJsonBuilder
+import com.selfuse.cellmap.map.MapLibreRuntime
 import com.selfuse.cellmap.map.MarkerIconCache
 import com.selfuse.cellmap.ui.components.AppTopBar
 import com.selfuse.cellmap.ui.components.DividerSpacer
@@ -124,7 +128,27 @@ fun MapScreen(onBack: () -> Unit) {
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val mapView = remember { MapView(context).apply { onCreate(null) } }
+    val initResult = remember(context) {
+        CrashDiagnostics.log(context, "MapScreen initializing MapLibre")
+        MapLibreRuntime.ensureInitialized(context)
+    }
+    if (initResult.isFailure) {
+        MapUnavailableScreen(initResult.exceptionOrNull(), onBack)
+        return
+    }
+    val mapViewResult = remember(context) {
+        runCatching {
+            CrashDiagnostics.log(context, "MapScreen creating MapView")
+            MapView(context).apply { onCreate(null) }
+        }.onFailure {
+            CrashDiagnostics.log(context, "MapView creation failed: $it")
+        }
+    }
+    val mapView = mapViewResult.getOrNull()
+    if (mapView == null) {
+        MapUnavailableScreen(mapViewResult.exceptionOrNull(), onBack)
+        return
+    }
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
     var showFilters by remember { mutableStateOf(false) }
@@ -681,6 +705,42 @@ private fun StationDetail(
                 Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("居中到该点")
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun MapUnavailableScreen(error: Throwable?, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val detail = error?.stackTraceToString().orEmpty().ifBlank { "未知错误" }
+    Scaffold(
+        topBar = { AppTopBar(title = "地图不可用", onBack = onBack) }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("MapLibre 初始化失败", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "应用其他功能仍可使用。诊断日志已写入 Download/cellmap-diagnostics.txt。",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 20,
+                overflow = TextOverflow.Ellipsis
+            )
+            Button(onClick = {
+                val clipboard = context.getSystemService(ClipboardManager::class.java)
+                clipboard?.setPrimaryClip(ClipData.newPlainText("MapLibre error", detail))
+            }) {
+                Text("复制错误信息")
             }
         }
     }

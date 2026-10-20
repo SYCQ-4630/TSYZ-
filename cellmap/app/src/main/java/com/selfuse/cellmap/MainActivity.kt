@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.selfuse.cellmap.diagnostics.CrashDiagnostics
 import com.selfuse.cellmap.ui.navigation.CellMapNavHost
 import com.selfuse.cellmap.ui.theme.CellMapTheme
 
@@ -22,6 +23,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashDiagnostics.log(this, "MainActivity.onCreate")
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
         setContent {
@@ -31,6 +33,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        CrashDiagnostics.log(this, "MainActivity content set")
     }
 
     private fun requestNotificationPermissionIfNeeded() {
