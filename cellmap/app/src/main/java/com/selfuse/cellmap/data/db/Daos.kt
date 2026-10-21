@@ -61,25 +61,21 @@ interface StationDao {
     @Query(
         """
         SELECT COUNT(*) FROM stations
-        WHERE stationId = :stationId AND system = :system
-          AND lat BETWEEN :lat - 0.0002 AND :lat + 0.0002
-          AND lon BETWEEN :lon - 0.0002 AND :lon + 0.0002
+        WHERE lat = :lat AND lon = :lon
           AND azimuth IS NOT NULL AND TRIM(azimuth) != ''
         """
     )
-    suspend fun sectorCellCount(stationId: String, system: String, lat: Double, lon: Double): Int
+    suspend fun sectorCellCountAt(lat: Double, lon: Double): Int
 
     @Query(
         """
         SELECT * FROM stations
-        WHERE stationId = :stationId AND system = :system
-          AND lat BETWEEN :lat - 0.0002 AND :lat + 0.0002
-          AND lon BETWEEN :lon - 0.0002 AND :lon + 0.0002
+        WHERE lat = :lat AND lon = :lon
           AND azimuth IS NOT NULL AND TRIM(azimuth) != ''
         ORDER BY id LIMIT 24
         """
     )
-    suspend fun sectorCells(stationId: String, system: String, lat: Double, lon: Double): List<StationEntity>
+    suspend fun sectorCellsAt(lat: Double, lon: Double): List<StationEntity>
 
     @Query("SELECT DISTINCT district FROM stations WHERE district IS NOT NULL AND district != '' ORDER BY district LIMIT 500")
     suspend fun distinctDistricts(): List<String>

@@ -20,6 +20,22 @@ class SectorGeometryTest {
     }
 
     @Test
+    fun `position key merges identical coordinates only`() {
+        assertEquals(
+            SectorGeometry.positionKey(30.1234567, 120.7654321),
+            SectorGeometry.positionKey(30.1234567, 120.7654321)
+        )
+        assertTrue(
+            SectorGeometry.positionKey(30.1234567, 120.7654321) !=
+                SectorGeometry.positionKey(30.1234568, 120.7654321)
+        )
+        assertTrue(
+            SectorGeometry.positionKey(30.1234567, 120.7654321) !=
+                SectorGeometry.positionKey(30.1234567, 120.7654322)
+        )
+    }
+
+    @Test
     fun `wedge ring starts and ends at center`() {
         val ring = SectorGeometry.wedge(30.0, 120.0, 45.0, 100.0)
         assertEquals(SectorGeometry.ARC_SEGMENTS + 3, ring.size)

@@ -1472,7 +1472,9 @@ private fun StationDetail(
                     )
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (sectorActive) "隐藏方位角扇区" else "显示方位角扇区")
+                Text(
+                    if (sectorActive) "隐藏方位角扇区" else "显示方位角扇区（$sectorCount）"
+                )
             }
         }
         Spacer(Modifier.height(12.dp))

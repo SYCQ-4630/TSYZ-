@@ -13,7 +13,7 @@ data class SectorCell(
     val radiusMeters: Double
 )
 
-/** 同站小区方位角扇区几何。仅在用户手动开启时生成，避免默认渲染开销。 */
+/** 同位置小区方位角扇区几何。仅在用户手动开启时生成，避免默认渲染开销。 */
 object SectorGeometry {
 
     const val BEAM_WIDTH = 64.0
@@ -21,6 +21,9 @@ object SectorGeometry {
     private const val EARTH_METERS_PER_DEGREE = 111_320.0
     const val ARC_SEGMENTS = 12
     private val NUMBER = Regex("[-+]?\\d+(?:\\.\\d+)?")
+
+    /** 经纬度完全相同的标识点归为同一位置，用于同点扇区合并。 */
+    fun positionKey(lat: Double, lon: Double): String = "${lat.toBits()}|${lon.toBits()}"
 
     /** 从「30」「30°」「30.5 度」等文本中提取方位角，超出 0..360 时归一化。 */
     fun parseAzimuth(text: String?): Double? {

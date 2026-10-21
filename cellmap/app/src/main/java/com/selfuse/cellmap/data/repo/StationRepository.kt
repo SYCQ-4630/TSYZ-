@@ -88,12 +88,12 @@ class StationRepository(private val db: AppDatabase) {
         db.stationDao().byId(id)
     }
 
-    suspend fun sectorCellCount(station: StationEntity): Int = withContext(Dispatchers.IO) {
-        db.stationDao().sectorCellCount(station.stationId, station.system, station.lat, station.lon)
+    suspend fun sectorCellCountAt(lat: Double, lon: Double): Int = withContext(Dispatchers.IO) {
+        db.stationDao().sectorCellCountAt(lat, lon)
     }
 
-    suspend fun sectorCells(station: StationEntity): List<StationEntity> = withContext(Dispatchers.IO) {
-        db.stationDao().sectorCells(station.stationId, station.system, station.lat, station.lon)
+    suspend fun sectorCellsAt(lat: Double, lon: Double): List<StationEntity> = withContext(Dispatchers.IO) {
+        db.stationDao().sectorCellsAt(lat, lon)
     }
 
     suspend fun distinctDistricts(): List<String> = withContext(Dispatchers.IO) {

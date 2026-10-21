@@ -461,7 +461,7 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
             val station = runCatching { c.stationRepository.byId(id) }.getOrNull()
             if (seq != selectionSeq) return@launch
             val sectors = station?.let {
-                runCatching { c.stationRepository.sectorCellCount(it) }.getOrDefault(0)
+                runCatching { c.stationRepository.sectorCellCountAt(it.lat, it.lon) }.getOrDefault(0)
             } ?: 0
             if (seq != selectionSeq) return@launch
             _state.update {
@@ -470,20 +470,21 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                     sectorBusy = false,
                     sectorCount = sectors,
                     selectedSectorActive = station != null &&
-                        sectorGroups.containsKey(sectorKey(station))
+                        sectorGroups.containsKey(sectorKey(station.lat, station.lon))
                 )
             }
         }
     }
 
     /**
-     * 扇区覆盖默认关闭，仅在用户点击后查询同站小区并生成几何，
+     * 扇区覆盖默认关闭，仅在用户点击后查询同坐标的小区并生成几何。
+     * 同一坐标上的多个标识点会一起展开，不同坐标互不影响；
      * 数量受 [SectorGeometry.MAX_CELLS] 限制，避免大量绘制拖慢地图。
      */
     fun toggleSectors() {
         val station = _state.value.selected ?: return
         if (_state.value.sectorBusy) return
-        val key = sectorKey(station)
+        val key = sectorKey(station.lat, station.lon)
         if (sectorGroups.containsKey(key)) {
             sectorGroups.remove(key)
             viewModelScope.launch {
@@ -493,13 +494,13 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
             return
         }
         if (sectorGroups.size >= MAX_SECTOR_GROUPS) {
-            _state.update { it.copy(message = "最多同时展开 $MAX_SECTOR_GROUPS 个基站扇区") }
+            _state.update { it.copy(message = "最多同时展开 $MAX_SECTOR_GROUPS 个位置的扇区") }
             return
         }
         val seq = selectionSeq
         viewModelScope.launch {
             _state.update { it.copy(sectorBusy = true) }
-            val entities = runCatching { c.stationRepository.sectorCells(station) }
+            val entities = runCatching { c.stationRepository.sectorCellsAt(station.lat, station.lon) }
                 .getOrDefault(emptyList())
             if (seq != selectionSeq) return@launch
             val radius = sectorRadiusMeters(station.lat)
@@ -515,11 +516,10 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                     system = entity.system,
                     radiusMeters = radius
                 )
-            }.distinctBy { (it.azimuth * 10).toInt() }
-                .take(SectorGeometry.MAX_CELLS)
+            }.take(SectorGeometry.MAX_CELLS)
             if (sectors.isEmpty()) {
                 _state.update {
-                    it.copy(sectorBusy = false, message = "该基站没有可用的方位角数据")
+                    it.copy(sectorBusy = false, message = "该位置没有可用的方位角数据")
                 }
                 return@launch
             }
@@ -572,11 +572,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
         return visible
     }
 
-    private fun sectorKey(station: StationEntity): String {
-        val lat = (station.lat * 1_000_000).toLong()
-        val lon = (station.lon * 1_000_000).toLong()
-        return "${station.stationId}|${station.system}|$lat|$lon"
-    }
+    private fun sectorKey(lat: Double, lon: Double): String =
+        SectorGeometry.positionKey(lat, lon)
 
     private data class SectorGroup(val cells: List<SectorCell>)
 
