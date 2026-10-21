@@ -16,7 +16,8 @@ data class ReadinessState(
 
 enum class NetworkSystem(val label: String) {
     FOUR_G("4G"),
-    FIVE_G("5G");
+    FIVE_G("5G"),
+    BOTH("45");
 
     companion object {
         private val fiveGPatterns = listOf(

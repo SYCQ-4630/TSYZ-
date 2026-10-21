@@ -198,7 +198,7 @@ class StationRepository(private val db: AppDatabase) {
     ): Pair<String, List<Any?>> {
         val clauses = mutableListOf<String>()
         val args = mutableListOf<Any?>()
-        if (includeSystem) {
+        if (includeSystem && system != NetworkSystem.BOTH) {
             clauses.add("$alias.system = ?")
             args.add(system.label)
         }

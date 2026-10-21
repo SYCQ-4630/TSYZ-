@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -83,6 +85,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -730,7 +733,18 @@ fun MapScreen(onBack: () -> Unit) {
                         )
                     }
                     if (activeBatch != null) {
-                        TextButton(onClick = { vm.setBatch(null) }) {
+                        OutlinedButton(
+                            onClick = { vm.setBatch(null) },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Icon(
+                                Icons.Filled.ClearAll,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
                             Text("显示全部")
                         }
                     }
@@ -788,6 +802,22 @@ fun MapScreen(onBack: () -> Unit) {
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
                             selected = state.system == NetworkSystem.FIVE_G,
+                            borderColor = MaterialTheme.colorScheme.outline,
+                            selectedBorderColor = MaterialTheme.colorScheme.primary,
+                            borderWidth = 1.dp,
+                            selectedBorderWidth = 1.dp
+                        )
+                    )
+                    FilterChip(
+                        selected = state.system == NetworkSystem.BOTH,
+                        onClick = { vm.setSystem(NetworkSystem.BOTH) },
+                        label = { Text("45") },
+                        shape = FilterChipDefaults.shape,
+                        colors = chipColors,
+                        elevation = chipElevation,
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = state.system == NetworkSystem.BOTH,
                             borderColor = MaterialTheme.colorScheme.outline,
                             selectedBorderColor = MaterialTheme.colorScheme.primary,
                             borderWidth = 1.dp,
@@ -1511,7 +1541,10 @@ private fun DenseGroupDialog(
         onDismissRequest = onDismiss,
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("此处 ${group.count} 个标注点")
+                Text(
+                    "此处 ${group.count} 个标注点",
+                    style = MaterialTheme.typography.titleMedium
+                )
                 Text(
                     "位置相近，点选一项查看详情",
                     style = MaterialTheme.typography.bodySmall,
@@ -1520,8 +1553,35 @@ private fun DenseGroupDialog(
             }
         },
         text = {
+            val listState = rememberLazyListState()
+            val thumbColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+            val thumbMinHeight = with(LocalDensity.current) { 32.dp.toPx() }
             LazyColumn(
-                modifier = Modifier.heightIn(max = 380.dp),
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 380.dp)
+                    .drawWithContent {
+                        drawContent()
+                        val layout = listState.layoutInfo
+                        val total = layout.totalItemsCount
+                        val visible = layout.visibleItemsInfo.size
+                        if (total > visible && visible > 0) {
+                            val thumbWidth = 4.dp.toPx()
+                            val thumbHeight = (size.height * visible / total)
+                                .coerceAtLeast(thumbMinHeight.coerceAtMost(size.height))
+                            val maxScroll = (total - visible).coerceAtLeast(1)
+                            val progress = (listState.firstVisibleItemIndex.toFloat() / maxScroll)
+                                .coerceIn(0f, 1f)
+                            val top = (size.height - thumbHeight) * progress
+                            drawRoundRect(
+                                color = thumbColor,
+                                topLeft = Offset(size.width - thumbWidth, top),
+                                size = Size(thumbWidth, thumbHeight),
+                                cornerRadius = CornerRadius(thumbWidth / 2f, thumbWidth / 2f)
+                            )
+                        }
+                    },
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 items(group.markers, key = { it.id }) { marker ->
