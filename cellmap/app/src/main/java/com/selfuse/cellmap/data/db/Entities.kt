@@ -42,6 +42,16 @@ data class StationEntity(
     val shared: String?,
     val antennaHeight: String?,
     val coDevice45G: String?,
+    val bandwidth: String? = null,
+    val uplinkFreq: String? = null,
+    val downlinkFreq: String? = null,
+    val deployment: String? = null,
+    val azimuth: String? = null,
+    val pci: String? = null,
+    val multiCarrier: String? = null,
+    val antennaGain: String? = null,
+    val aauCount: String? = null,
+    val rruCount: String? = null,
     val system: String,
     val markerStyle: String? = null,
     val searchBlob: String = "",
@@ -50,6 +60,18 @@ data class StationEntity(
     @ColumnInfo(name = "sharedNorm") val sharedNorm: String = "",
     val createdAt: Long,
     val updatedAt: Long
+)
+
+data class StationMarkerRow(
+    val id: Long,
+    val lat: Double,
+    val lon: Double,
+    val markerStyle: String?,
+    val system: String,
+    val cellName: String?,
+    val siteName: String?,
+    val stationId: String,
+    val cellId: String
 )
 
 @Entity(

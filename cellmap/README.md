@@ -44,8 +44,8 @@ sdk.dir=/path/to/Android/Sdk
 
 | 版本 | 包名 | 适配设备 | 下载 |
 | --- | --- | --- | --- |
-| 荣耀版 1.1.0 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.1.0.apk |
-| 鸿蒙版 1.1.0 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.1.0.apk |
+| 荣耀版 1.2.0 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.2.0.apk |
+| 鸿蒙版 1.2.0 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.2.0.apk |
 
 校验值同时放在对应分支的 `.sha256` 文件中。两版可同机共存，数据互不共享；换版本需要重新导入与标注。
 
@@ -55,7 +55,7 @@ sdk.dir=/path/to/Android/Sdk
 
 HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要在卓易通中运行：
 
-1. 将 `dist/cellmap-debug.apk` 传到手机，在卓易通内选择「本地安装」并允许安装未知来源应用。
+1. 将 `dist/huawei/cellmap-huawei-1.2.0.apk` 传到手机，在卓易通内选择「本地安装」并允许安装未知来源应用。
 2. 首次启动授予通知权限；若容器内无法跳转电池优化设置，可忽略，导入时保持应用在前台。
 3. 地图黑屏或闪烁时，进入地图右上角筛选面板，打开「兼容渲染 → 纹理模式」，返回首页后重新进入地图。
 4. 文件选择器看不到 XLSX 时，先在华为文件管理把文件复制到 `Download` 或卓易通的共享文件夹，再重新选择。
@@ -88,14 +88,19 @@ HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要
 | 是否共享 | 已共享 / 未共享，用于圆点与方块区分 |
 | 频段/制式 | 4G / 5G，或 1.8G / 2.1G / 900M / 800M / 3.5G / 2.6G 等频段写法 |
 
-可选列包括基站名称、小区名称、运营商、所属区县、频段明细、覆盖类别、天线总挂高、45G 共设备等。表头支持常见别名与模糊匹配；只有「频段」列时该列会同时用于识别 4G/5G，导入前可手动调整映射。
+可选列包括基站名称、小区名称、运营商、所属区县、小区覆盖类、频段明细、带宽、上行/下行中心频点、多载波标识、基站部署方式、天线挂高、小区方位角、天线增益、PCI、AAU 数量、RRU 数量、45G 共设备等。表头支持常见别名；只有「频段」列时该列会同时用于识别 4G/5G，导入前可手动调整映射。
+
+「天线挂高」「天线总挂高」「小区总挂高」「小区高度」等写法会归入同一字段。当表头只是近似匹配（例如「带宽(MHz)」「小区高度（米）」）时，映射页会按「标识与名称 / 覆盖与天线 / 频率与带宽 / 小区参数与设备」分组列出建议，逐类确认后才会写入，避免静默错配；不确认即视为不导入该列。
+
+从 1.1.0 覆盖安装会执行数据库增量迁移，已导入数据与标注结果保留；新增字段对旧记录为空，重新导入同一文件时仍按「基站 ID + 小区 ID」去重。
 
 同一「基站 ID + 小区 ID」重复导入会被忽略。
 
 ## 技术要点
 
 - Kotlin + Jetpack Compose + Material 3，MVVM + Repository，Coroutines/Flow
-- Room 业务表与空间索引表同事务写入；不依赖 SQLite 可选模块
+- Room 业务表与空间索引表同事务写入；不依赖 SQLite 可选模块，新增列通过 `MIGRATION_2_3` 增量迁移
+- 地图视野查询只取绘制所需的 9 个列（`StationMarkerRow` 投影），不随字段扩充搬运整行文本，避免大结果集时掉帧
 - XLSX 使用平台 SAX 直接解析 OOXML，流式按批写入，不构建工作簿对象
 - 地图使用 MapLibre，符号图层绘制四色标记，聚合图层分级展示；天地图影像注记叠加路网、POI 与楼栋名称，可在筛选面板关闭以节省流量与电量
 - 地图每次进入都从中国大陆全图视野开始，搜索框、筛选和选中基站不跨次恢复

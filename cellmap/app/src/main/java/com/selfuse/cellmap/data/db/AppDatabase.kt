@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OptimizedClusterEntity::class,
         OptimizedChunkEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -38,7 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "cellmap.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration(true)
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
@@ -92,6 +92,25 @@ abstract class AppDatabase : RoomDatabase() {
                 "INSERT OR REPLACE INTO optimized_rtree(id, minLat, maxLat, minLon, maxLon) " +
                     "SELECT id, lat, lat, lon, lon FROM optimized_markers"
             )
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf(
+                    "bandwidth",
+                    "uplinkFreq",
+                    "downlinkFreq",
+                    "deployment",
+                    "azimuth",
+                    "pci",
+                    "multiCarrier",
+                    "antennaGain",
+                    "aauCount",
+                    "rruCount"
+                ).forEach { column ->
+                    db.execSQL("ALTER TABLE stations ADD COLUMN $column TEXT")
+                }
+            }
         }
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {

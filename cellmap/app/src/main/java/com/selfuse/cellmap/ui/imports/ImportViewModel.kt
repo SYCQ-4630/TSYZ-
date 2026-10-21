@@ -15,6 +15,7 @@ import com.selfuse.cellmap.core.model.TaskType
 import com.selfuse.cellmap.data.db.ImportBatchEntity
 import com.selfuse.cellmap.data.db.toSummary
 import com.selfuse.cellmap.data.importer.ColumnMapping
+import com.selfuse.cellmap.data.importer.FieldSuggestion
 import com.selfuse.cellmap.data.importer.SheetPreview
 import com.selfuse.cellmap.data.prefs.ImportSpec
 import com.selfuse.cellmap.data.repo.StagedFile
@@ -36,6 +37,7 @@ data class ImportUiState(
     val rowNumbers: List<Int> = emptyList(),
     val headerRow: Int = 0,
     val mapping: Map<StationField, Int> = emptyMap(),
+    val suggestions: List<FieldSuggestion> = emptyList(),
     val totalRows: Int = 0,
     val busy: Boolean = false,
     val queued: Boolean = false,
@@ -58,6 +60,7 @@ private data class ImportDraft(
     val rowNumbers: List<Int> = emptyList(),
     val headerRow: Int = 0,
     val mapping: Map<StationField, Int> = emptyMap(),
+    val suggestions: List<FieldSuggestion> = emptyList(),
     val totalRows: Int = 0,
     val busy: Boolean = false,
     val queued: Boolean = false,
@@ -86,6 +89,7 @@ class ImportViewModel(app: CellMapApp) : ViewModel() {
             rowNumbers = draft.rowNumbers,
             headerRow = draft.headerRow,
             mapping = draft.mapping,
+            suggestions = draft.suggestions,
             totalRows = draft.totalRows,
             busy = draft.busy,
             queued = draft.queued,
@@ -109,6 +113,7 @@ class ImportViewModel(app: CellMapApp) : ViewModel() {
                 val headerIndex = scanned.rowNumbers.indexOfFirst { it >= 0 }.coerceAtLeast(0)
                 val headerRow = scanned.rowNumbers.getOrElse(headerIndex) { 0 }
                 val columns = scanned.rows.getOrElse(headerIndex) { emptyList() }
+                val detection = ColumnMapping.detect(columns)
                 draft.update {
                     it.copy(
                         staging = false,
@@ -119,7 +124,8 @@ class ImportViewModel(app: CellMapApp) : ViewModel() {
                         previewRows = scanned.rows,
                         rowNumbers = scanned.rowNumbers,
                         headerRow = headerRow,
-                        mapping = ColumnMapping.autoDetect(columns),
+                        mapping = detection.mapping,
+                        suggestions = detection.suggestions,
                         totalRows = c.importRepository.totalRows(scanned, headerRow)
                     )
                 }
@@ -135,10 +141,12 @@ class ImportViewModel(app: CellMapApp) : ViewModel() {
         val scanned = preview ?: return
         val rowNumber = scanned.rowNumbers.getOrElse(previewIndex) { previewIndex }
         val columns = scanned.rows.getOrElse(previewIndex) { emptyList() }
+        val detection = ColumnMapping.detect(columns)
         draft.update {
             it.copy(
                 headerRow = rowNumber,
-                mapping = ColumnMapping.autoDetect(columns),
+                mapping = detection.mapping,
+                suggestions = detection.suggestions,
                 totalRows = c.importRepository.totalRows(scanned, rowNumber)
             )
         }
@@ -148,7 +156,33 @@ class ImportViewModel(app: CellMapApp) : ViewModel() {
         draft.update {
             val next = it.mapping.toMutableMap()
             if (column == null) next.remove(field) else next[field] = column
-            it.copy(mapping = next)
+            it.copy(
+                mapping = next,
+                suggestions = it.suggestions.filterNot { suggestion -> suggestion.field == field }
+            )
+        }
+    }
+
+    fun applySuggestions(fields: Set<StationField>) {
+        if (fields.isEmpty()) return
+        draft.update {
+            val next = it.mapping.toMutableMap()
+            it.suggestions
+                .filter { suggestion -> suggestion.field in fields }
+                .forEach { suggestion ->
+                    if (!next.containsKey(suggestion.field)) next[suggestion.field] = suggestion.column
+                }
+            it.copy(
+                mapping = next,
+                suggestions = it.suggestions.filterNot { suggestion -> suggestion.field in fields }
+            )
+        }
+    }
+
+    fun ignoreSuggestions(fields: Set<StationField>) {
+        if (fields.isEmpty()) return
+        draft.update {
+            it.copy(suggestions = it.suggestions.filterNot { suggestion -> suggestion.field in fields })
         }
     }
 

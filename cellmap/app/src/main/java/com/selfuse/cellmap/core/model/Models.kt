@@ -155,23 +155,47 @@ data class MarkerFilters(
             (if (category.isNotBlank()) 1 else 0)
 }
 
-enum class StationField(val displayName: String, val required: Boolean, val aliases: List<String>) {
-    LATITUDE("纬度", true, listOf("纬度", "lat", "latitude")),
-    LONGITUDE("经度", true, listOf("经度", "lon", "lng", "longitude")),
+enum class FieldGroup(val label: String) {
+    IDENTITY("标识与名称"),
+    LOCATION("位置"),
+    COVERAGE("覆盖与天线"),
+    FREQUENCY("频率与带宽"),
+    RADIO("小区参数与设备"),
+    OPERATION("运营与共享")
+}
+
+enum class StationField(
+    val displayName: String,
+    val required: Boolean,
+    val aliases: List<String>,
+    val group: FieldGroup = FieldGroup.OPERATION
+) {
+    LATITUDE("纬度", true, listOf("纬度", "lat", "latitude"), FieldGroup.LOCATION),
+    LONGITUDE("经度", true, listOf("经度", "lon", "lng", "longitude"), FieldGroup.LOCATION),
     BUILDER("承建方", true, listOf("承建方", "承建单位", "建设单位", "builder")),
     OPERATOR("运营商", false, listOf("运营商", "运营方", "operator")),
     DISTRICT("管理区县", false, listOf("管理区县", "区县", "行政区县", "district")),
     OWNER("网元归属方", false, listOf("网元归属方", "归属方", "网元归属", "owner")),
-    STATION_ID("基站 ID", true, listOf("基站id", "基站编号", "基站标识", "stationid", "enodebid", "gnbid")),
-    CELL_NAME("小区名称", false, listOf("小区名称", "小区名", "cellname")),
-    CELL_ID("小区 ID", true, listOf("小区id", "小区编号", "小区标识", "cellid", "localcellid")),
-    CATEGORY("覆盖类别", false, listOf("覆盖类别", "覆盖类型", "category")),
-    BAND("频段明细", false, listOf("频段", "频率", "频段号", "band", "frequency")),
-    SITE_NAME("站址名称", false, listOf("站址名称", "站址", "站点名称", "sitename")),
+    STATION_ID("基站 ID", true, listOf("基站id", "基站编号", "基站标识", "stationid", "enodebid", "gnbid"), FieldGroup.IDENTITY),
+    CELL_NAME("小区名称", false, listOf("小区名称", "小区名", "cellname"), FieldGroup.IDENTITY),
+    CELL_ID("小区 ID", true, listOf("小区id", "小区编号", "小区标识", "cellid", "localcellid"), FieldGroup.IDENTITY),
+    CATEGORY("小区覆盖类", false, listOf("小区覆盖类", "小区覆盖类别", "小区覆盖类型", "覆盖类别", "覆盖类型", "覆盖类", "category"), FieldGroup.COVERAGE),
+    BAND("频段明细", false, listOf("频段", "频率", "频段号", "band", "frequency"), FieldGroup.FREQUENCY),
+    SITE_NAME("基站名称", false, listOf("基站名称", "基站名", "站址名称", "站址", "站点名称", "sitename"), FieldGroup.IDENTITY),
     SHARED("是否共享", true, listOf("是否共享", "共享", "共享状态", "isshared", "shared")),
-    ANTENNA_HEIGHT("天线总挂高", false, listOf("天线总挂高", "挂高", "天线高度", "antennaheight")),
-    CO_DEVICE_45G("45G 共设备", false, listOf("45g共设备", "共设备", "45g", "codevice")),
-    SYSTEM("频段/制式", true, listOf("制式", "网络制式", "系统", "网络类型", "频段", "频率", "system", "networktype", "band", "frequency"));
+    ANTENNA_HEIGHT("天线挂高", false, listOf("天线挂高", "天线总挂高", "小区总挂高", "小区高度", "小区挂高", "挂高", "天线高度", "antennaheight"), FieldGroup.COVERAGE),
+    CO_DEVICE_45G("45G 共设备", false, listOf("45g共设备", "共设备", "45g", "codevice"), FieldGroup.RADIO),
+    BANDWIDTH("带宽", false, listOf("带宽", "小区带宽", "载波带宽", "bandwidth"), FieldGroup.FREQUENCY),
+    UPLINK_FREQ("上行中心频点", false, listOf("上行中心频点", "上行频点", "上行中心频率", "上行频率", "uplinkfreq", "ulfreq", "upfreq"), FieldGroup.FREQUENCY),
+    DOWNLINK_FREQ("下行中心频点", false, listOf("下行中心频点", "下行频点", "下行中心频率", "下行频率", "downlinkfreq", "dlfreq", "downfreq"), FieldGroup.FREQUENCY),
+    DEPLOYMENT("基站部署方式", false, listOf("基站部署方式", "部署方式", "基站类型", "站点类型", "deployment", "deploymenttype"), FieldGroup.RADIO),
+    AZIMUTH("小区方位角", false, listOf("小区方位角", "方位角", "天线方位角", "azimuth"), FieldGroup.COVERAGE),
+    PCI("PCI", false, listOf("pci", "小区pci", "物理小区标识", "物理小区id"), FieldGroup.RADIO),
+    MULTI_CARRIER("多载波标识", false, listOf("多载波标识", "多载波标志", "多载波", "载波标识", "multicarrier"), FieldGroup.FREQUENCY),
+    ANTENNA_GAIN("天线增益", false, listOf("天线增益", "天线增益db", "antennagain"), FieldGroup.COVERAGE),
+    AAU_COUNT("AAU 数量", false, listOf("aau数量", "aau数", "aau个数", "aaucount", "aauqty"), FieldGroup.RADIO),
+    RRU_COUNT("RRU 数量", false, listOf("rru数量", "rru数", "rru个数", "rrucount", "rruqty"), FieldGroup.RADIO),
+    SYSTEM("频段/制式", true, listOf("制式", "网络制式", "系统", "网络类型", "频段", "频率", "system", "networktype", "band", "frequency"), FieldGroup.FREQUENCY);
 
     companion object {
         fun fromName(name: String?): StationField? = entries.firstOrNull { it.name == name }

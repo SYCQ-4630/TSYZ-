@@ -69,6 +69,9 @@ interface StationDao {
 
     @RawQuery
     suspend fun rawQuery(query: SupportSQLiteQuery): List<StationEntity>
+
+    @RawQuery
+    suspend fun rawMarkers(query: SupportSQLiteQuery): List<StationMarkerRow>
 }
 
 @Dao

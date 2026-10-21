@@ -32,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,9 +47,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.selfuse.cellmap.CellMapApp
+import com.selfuse.cellmap.core.model.FieldGroup
 import com.selfuse.cellmap.core.model.ImportSummary
 import com.selfuse.cellmap.core.model.StationField
 import com.selfuse.cellmap.core.util.Formats
+import com.selfuse.cellmap.data.importer.FieldSuggestion
 import com.selfuse.cellmap.ui.components.AppTopBar
 import com.selfuse.cellmap.ui.components.DividerSpacer
 import com.selfuse.cellmap.ui.components.EmptyHint
@@ -161,6 +164,11 @@ fun ImportScreen(onBack: () -> Unit) {
             if (state.fileName != null && state.previewRows.isNotEmpty()) {
                 HeaderSelectionCard(state = state, onChoose = vm::chooseHeader)
                 PreviewCard(state = state)
+                SuggestionCard(
+                    suggestions = state.suggestions,
+                    onApply = vm::applySuggestions,
+                    onIgnore = vm::ignoreSuggestions
+                )
                 MappingCard(state = state, onSelect = vm::setColumn)
 
                 if (state.missingRequired.isNotEmpty()) {
@@ -266,6 +274,57 @@ private fun PreviewCard(state: ImportUiState) {
 }
 
 @Composable
+private fun SuggestionCard(
+    suggestions: List<FieldSuggestion>,
+    onApply: (Set<StationField>) -> Unit,
+    onIgnore: (Set<StationField>) -> Unit
+) {
+    if (suggestions.isEmpty()) return
+    val grouped = suggestions.groupBy { it.field.group }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("相近字段待确认", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "以下表头与字段名相近但不是完全一致，按类别确认后才会写入。",
+                style = MaterialTheme.typography.bodySmall
+            )
+            grouped.forEach { (group, items) ->
+                Spacer(Modifier.height(10.dp))
+                Text(group.label, style = MaterialTheme.typography.labelLarge)
+                items.forEach { suggestion ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(suggestion.field.displayName, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "第 ${suggestion.column + 1} 列 · ${suggestion.header.ifBlank { "（空表头）" }}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { onApply(items.map { it.field }.toSet()) }) {
+                        Text("采用本类（${items.size}）")
+                    }
+                    TextButton(onClick = { onIgnore(items.map { it.field }.toSet()) }) {
+                        Text("忽略本类")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MappingCard(
     state: ImportUiState,
     onSelect: (StationField, Int?) -> Unit
@@ -290,8 +349,18 @@ private fun MappingCard(
             }
             DividerSpacer()
             Text("选填", style = MaterialTheme.typography.labelLarge)
-            optional.forEach { field ->
-                MappingRow(field, columns, state.mapping[field], onSelect)
+            FieldGroup.entries.forEach { group ->
+                val fields = optional.filter { it.group == group }
+                if (fields.isEmpty()) return@forEach
+                Text(
+                    group.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
+                )
+                fields.forEach { field ->
+                    MappingRow(field, columns, state.mapping[field], onSelect)
+                }
             }
         }
     }

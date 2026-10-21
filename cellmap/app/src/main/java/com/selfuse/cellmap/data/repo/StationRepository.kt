@@ -12,6 +12,7 @@ import com.selfuse.cellmap.core.util.GeoBounds
 import com.selfuse.cellmap.data.db.AppDatabase
 import com.selfuse.cellmap.data.db.OptimizedMarkerEntity
 import com.selfuse.cellmap.data.db.StationEntity
+import com.selfuse.cellmap.data.db.StationMarkerRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -106,10 +107,12 @@ class StationRepository(private val db: AppDatabase) {
         system: NetworkSystem,
         filters: MarkerFilters,
         limit: Int
-    ): List<StationEntity> {
+    ): List<StationMarkerRow> {
         val (where, args) = buildFilters(filters, "s", system, includeSystem = true)
         val sql = buildString {
-            append("SELECT s.* FROM stations s JOIN station_rtree r ON s.id = r.id ")
+            append("SELECT s.id, s.lat, s.lon, s.markerStyle, s.system, ")
+            append("s.cellName, s.siteName, s.stationId, s.cellId ")
+            append("FROM stations s JOIN station_rtree r ON s.id = r.id ")
             append("WHERE r.maxLat >= ? AND r.minLat <= ? AND r.maxLon >= ? AND r.minLon <= ? ")
             if (where.isNotBlank()) append("AND ").append(where).append(' ')
             append("LIMIT ?")
@@ -118,7 +121,7 @@ class StationRepository(private val db: AppDatabase) {
             listOf<Any?>(bounds.minLat, bounds.maxLat, bounds.minLon, bounds.maxLon) +
                 args + limit
             ).toTypedArray()
-        return db.stationDao().rawQuery(SimpleSQLiteQuery(sql, sqlArgs))
+        return db.stationDao().rawMarkers(SimpleSQLiteQuery(sql, sqlArgs))
     }
 
     private suspend fun queryOptimized(
@@ -212,7 +215,7 @@ class StationRepository(private val db: AppDatabase) {
         return clauses.joinToString(" AND ") to args
     }
 
-    private fun StationEntity.toMapMarker(): MapMarker? {
+    private fun StationMarkerRow.toMapMarker(): MapMarker? {
         val style = MarkerStyle.fromKey(markerStyle) ?: return null
         return MapMarker(
             id = id,

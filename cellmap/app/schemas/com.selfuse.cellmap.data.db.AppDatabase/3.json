@@ -1,0 +1,923 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "dbf7b0b2ea795e66d143b10fed4f924a",
+    "entities": [
+      {
+        "tableName": "stations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `batchId` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `builder` TEXT, `operator` TEXT, `district` TEXT, `owner` TEXT, `stationId` TEXT NOT NULL, `cellName` TEXT, `cellId` TEXT NOT NULL, `category` TEXT, `band` TEXT, `siteName` TEXT, `shared` TEXT, `antennaHeight` TEXT, `coDevice45G` TEXT, `bandwidth` TEXT, `uplinkFreq` TEXT, `downlinkFreq` TEXT, `deployment` TEXT, `azimuth` TEXT, `pci` TEXT, `multiCarrier` TEXT, `antennaGain` TEXT, `aauCount` TEXT, `rruCount` TEXT, `system` TEXT NOT NULL, `markerStyle` TEXT, `searchBlob` TEXT NOT NULL, `operatorNorm` TEXT NOT NULL, `builderNorm` TEXT NOT NULL, `sharedNorm` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "batchId",
+            "columnName": "batchId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "builder",
+            "columnName": "builder",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "operator",
+            "columnName": "operator",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "district",
+            "columnName": "district",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "owner",
+            "columnName": "owner",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "stationId",
+            "columnName": "stationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cellName",
+            "columnName": "cellName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cellId",
+            "columnName": "cellId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "band",
+            "columnName": "band",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "siteName",
+            "columnName": "siteName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "shared",
+            "columnName": "shared",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "antennaHeight",
+            "columnName": "antennaHeight",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "coDevice45G",
+            "columnName": "coDevice45G",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bandwidth",
+            "columnName": "bandwidth",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "uplinkFreq",
+            "columnName": "uplinkFreq",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "downlinkFreq",
+            "columnName": "downlinkFreq",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deployment",
+            "columnName": "deployment",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "azimuth",
+            "columnName": "azimuth",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pci",
+            "columnName": "pci",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "multiCarrier",
+            "columnName": "multiCarrier",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "antennaGain",
+            "columnName": "antennaGain",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "aauCount",
+            "columnName": "aauCount",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rruCount",
+            "columnName": "rruCount",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "system",
+            "columnName": "system",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "markerStyle",
+            "columnName": "markerStyle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "searchBlob",
+            "columnName": "searchBlob",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operatorNorm",
+            "columnName": "operatorNorm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "builderNorm",
+            "columnName": "builderNorm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sharedNorm",
+            "columnName": "sharedNorm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_stations_stationId",
+            "unique": false,
+            "columnNames": [
+              "stationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_stationId` ON `${TABLE_NAME}` (`stationId`)"
+          },
+          {
+            "name": "index_stations_cellId",
+            "unique": false,
+            "columnNames": [
+              "cellId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_cellId` ON `${TABLE_NAME}` (`cellId`)"
+          },
+          {
+            "name": "index_stations_stationId_cellId",
+            "unique": true,
+            "columnNames": [
+              "stationId",
+              "cellId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_stations_stationId_cellId` ON `${TABLE_NAME}` (`stationId`, `cellId`)"
+          },
+          {
+            "name": "index_stations_system",
+            "unique": false,
+            "columnNames": [
+              "system"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_system` ON `${TABLE_NAME}` (`system`)"
+          },
+          {
+            "name": "index_stations_operatorNorm",
+            "unique": false,
+            "columnNames": [
+              "operatorNorm"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_operatorNorm` ON `${TABLE_NAME}` (`operatorNorm`)"
+          },
+          {
+            "name": "index_stations_sharedNorm",
+            "unique": false,
+            "columnNames": [
+              "sharedNorm"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_sharedNorm` ON `${TABLE_NAME}` (`sharedNorm`)"
+          },
+          {
+            "name": "index_stations_district",
+            "unique": false,
+            "columnNames": [
+              "district"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_district` ON `${TABLE_NAME}` (`district`)"
+          },
+          {
+            "name": "index_stations_band",
+            "unique": false,
+            "columnNames": [
+              "band"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_band` ON `${TABLE_NAME}` (`band`)"
+          },
+          {
+            "name": "index_stations_markerStyle",
+            "unique": false,
+            "columnNames": [
+              "markerStyle"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_markerStyle` ON `${TABLE_NAME}` (`markerStyle`)"
+          },
+          {
+            "name": "index_stations_batchId",
+            "unique": false,
+            "columnNames": [
+              "batchId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_stations_batchId` ON `${TABLE_NAME}` (`batchId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "import_batches",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fileName` TEXT NOT NULL, `sheetName` TEXT NOT NULL, `headerRow` INTEGER NOT NULL, `dataVersion` INTEGER NOT NULL, `totalRows` INTEGER NOT NULL, `processedRows` INTEGER NOT NULL, `successRows` INTEGER NOT NULL, `duplicateRows` INTEGER NOT NULL, `failedRows` INTEGER NOT NULL, `failedReasonsJson` TEXT NOT NULL, `status` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `importedAt` INTEGER NOT NULL, `note` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileName",
+            "columnName": "fileName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sheetName",
+            "columnName": "sheetName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "headerRow",
+            "columnName": "headerRow",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataVersion",
+            "columnName": "dataVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalRows",
+            "columnName": "totalRows",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "processedRows",
+            "columnName": "processedRows",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "successRows",
+            "columnName": "successRows",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "duplicateRows",
+            "columnName": "duplicateRows",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "failedRows",
+            "columnName": "failedRows",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "failedReasonsJson",
+            "columnName": "failedReasonsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importedAt",
+            "columnName": "importedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_import_batches_importedAt",
+            "unique": false,
+            "columnNames": [
+              "importedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_import_batches_importedAt` ON `${TABLE_NAME}` (`importedAt`)"
+          },
+          {
+            "name": "index_import_batches_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_import_batches_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ]
+      },
+      {
+        "tableName": "app_logs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `ts` INTEGER NOT NULL, `module` TEXT NOT NULL, `level` TEXT NOT NULL, `message` TEXT NOT NULL, `detail` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ts",
+            "columnName": "ts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "module",
+            "columnName": "module",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "message",
+            "columnName": "message",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "detail",
+            "columnName": "detail",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_app_logs_ts",
+            "unique": false,
+            "columnNames": [
+              "ts"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_logs_ts` ON `${TABLE_NAME}` (`ts`)"
+          },
+          {
+            "name": "index_app_logs_module",
+            "unique": false,
+            "columnNames": [
+              "module"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_logs_module` ON `${TABLE_NAME}` (`module`)"
+          },
+          {
+            "name": "index_app_logs_level",
+            "unique": false,
+            "columnNames": [
+              "level"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_app_logs_level` ON `${TABLE_NAME}` (`level`)"
+          }
+        ]
+      },
+      {
+        "tableName": "optimization_runs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `status` TEXT NOT NULL, `dataVersion` INTEGER NOT NULL, `startedAt` INTEGER NOT NULL, `finishedAt` INTEGER NOT NULL, `markerCount` INTEGER NOT NULL, `clusterCount` INTEGER NOT NULL, `chunkCount` INTEGER NOT NULL, `rawBytes` INTEGER NOT NULL, `optimizedBytes` INTEGER NOT NULL, `note` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataVersion",
+            "columnName": "dataVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finishedAt",
+            "columnName": "finishedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "markerCount",
+            "columnName": "markerCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clusterCount",
+            "columnName": "clusterCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chunkCount",
+            "columnName": "chunkCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawBytes",
+            "columnName": "rawBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "optimizedBytes",
+            "columnName": "optimizedBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_optimization_runs_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimization_runs_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_optimization_runs_dataVersion",
+            "unique": false,
+            "columnNames": [
+              "dataVersion"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimization_runs_dataVersion` ON `${TABLE_NAME}` (`dataVersion`)"
+          },
+          {
+            "name": "index_optimization_runs_startedAt",
+            "unique": false,
+            "columnNames": [
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimization_runs_startedAt` ON `${TABLE_NAME}` (`startedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "optimized_markers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `markerStyle` TEXT NOT NULL, `system` TEXT NOT NULL, `operatorNorm` TEXT NOT NULL, `builderNorm` TEXT NOT NULL, `sharedNorm` TEXT NOT NULL, `district` TEXT, `band` TEXT, `category` TEXT, `cellName` TEXT, `stationId` TEXT NOT NULL, `cellId` TEXT NOT NULL, `siteName` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "markerStyle",
+            "columnName": "markerStyle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "system",
+            "columnName": "system",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operatorNorm",
+            "columnName": "operatorNorm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "builderNorm",
+            "columnName": "builderNorm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sharedNorm",
+            "columnName": "sharedNorm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "district",
+            "columnName": "district",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "band",
+            "columnName": "band",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cellName",
+            "columnName": "cellName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "stationId",
+            "columnName": "stationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cellId",
+            "columnName": "cellId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "siteName",
+            "columnName": "siteName",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_optimized_markers_markerStyle",
+            "unique": false,
+            "columnNames": [
+              "markerStyle"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_markers_markerStyle` ON `${TABLE_NAME}` (`markerStyle`)"
+          },
+          {
+            "name": "index_optimized_markers_system",
+            "unique": false,
+            "columnNames": [
+              "system"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_markers_system` ON `${TABLE_NAME}` (`system`)"
+          },
+          {
+            "name": "index_optimized_markers_district",
+            "unique": false,
+            "columnNames": [
+              "district"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_markers_district` ON `${TABLE_NAME}` (`district`)"
+          },
+          {
+            "name": "index_optimized_markers_band",
+            "unique": false,
+            "columnNames": [
+              "band"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_markers_band` ON `${TABLE_NAME}` (`band`)"
+          }
+        ]
+      },
+      {
+        "tableName": "optimized_clusters",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`zoomLevel` INTEGER NOT NULL, `tileX` INTEGER NOT NULL, `tileY` INTEGER NOT NULL, `count` INTEGER NOT NULL, `unicomShared` INTEGER NOT NULL, `telecomShared` INTEGER NOT NULL, `unicomPrivate` INTEGER NOT NULL, `telecomPrivate` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, PRIMARY KEY(`zoomLevel`, `tileX`, `tileY`))",
+        "fields": [
+          {
+            "fieldPath": "zoomLevel",
+            "columnName": "zoomLevel",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tileX",
+            "columnName": "tileX",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tileY",
+            "columnName": "tileY",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "count",
+            "columnName": "count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unicomShared",
+            "columnName": "unicomShared",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "telecomShared",
+            "columnName": "telecomShared",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unicomPrivate",
+            "columnName": "unicomPrivate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "telecomPrivate",
+            "columnName": "telecomPrivate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "zoomLevel",
+            "tileX",
+            "tileY"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_optimized_clusters_zoomLevel_lat_lon",
+            "unique": false,
+            "columnNames": [
+              "zoomLevel",
+              "lat",
+              "lon"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_clusters_zoomLevel_lat_lon` ON `${TABLE_NAME}` (`zoomLevel`, `lat`, `lon`)"
+          },
+          {
+            "name": "index_optimized_clusters_zoomLevel_tileX",
+            "unique": false,
+            "columnNames": [
+              "zoomLevel",
+              "tileX"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_clusters_zoomLevel_tileX` ON `${TABLE_NAME}` (`zoomLevel`, `tileX`)"
+          }
+        ]
+      },
+      {
+        "tableName": "optimized_chunks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`chunkId` TEXT NOT NULL, `minLat` REAL NOT NULL, `maxLat` REAL NOT NULL, `minLon` REAL NOT NULL, `maxLon` REAL NOT NULL, `markerCount` INTEGER NOT NULL, `byteSize` INTEGER NOT NULL, `filePath` TEXT NOT NULL, PRIMARY KEY(`chunkId`))",
+        "fields": [
+          {
+            "fieldPath": "chunkId",
+            "columnName": "chunkId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minLat",
+            "columnName": "minLat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxLat",
+            "columnName": "maxLat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minLon",
+            "columnName": "minLon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxLon",
+            "columnName": "maxLon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "markerCount",
+            "columnName": "markerCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "byteSize",
+            "columnName": "byteSize",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filePath",
+            "columnName": "filePath",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "chunkId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_optimized_chunks_minLat_maxLat",
+            "unique": false,
+            "columnNames": [
+              "minLat",
+              "maxLat"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_chunks_minLat_maxLat` ON `${TABLE_NAME}` (`minLat`, `maxLat`)"
+          },
+          {
+            "name": "index_optimized_chunks_minLon_maxLon",
+            "unique": false,
+            "columnNames": [
+              "minLon",
+              "maxLon"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_optimized_chunks_minLon_maxLon` ON `${TABLE_NAME}` (`minLon`, `maxLon`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dbf7b0b2ea795e66d143b10fed4f924a')"
+    ]
+  }
+}

@@ -485,6 +485,16 @@ class XlsxParser {
                 shared = shared,
                 antennaHeight = raw(StationField.ANTENNA_HEIGHT),
                 coDevice45G = raw(StationField.CO_DEVICE_45G),
+                bandwidth = raw(StationField.BANDWIDTH),
+                uplinkFreq = raw(StationField.UPLINK_FREQ),
+                downlinkFreq = raw(StationField.DOWNLINK_FREQ),
+                deployment = raw(StationField.DEPLOYMENT),
+                azimuth = raw(StationField.AZIMUTH),
+                pci = raw(StationField.PCI),
+                multiCarrier = raw(StationField.MULTI_CARRIER),
+                antennaGain = raw(StationField.ANTENNA_GAIN),
+                aauCount = raw(StationField.AAU_COUNT),
+                rruCount = raw(StationField.RRU_COUNT),
                 system = system.label,
                 operatorNorm = Normalizer.operator(operator).label,
                 builderNorm = Normalizer.builder(builder).label,
@@ -619,27 +629,69 @@ fun columnIndex(reference: String?): Int {
     return if (any) value - 1 else -1
 }
 
+data class FieldSuggestion(
+    val field: StationField,
+    val column: Int,
+    val header: String
+)
+
+data class ColumnDetection(
+    val mapping: Map<StationField, Int>,
+    val suggestions: List<FieldSuggestion>
+)
+
 object ColumnMapping {
     private val systemAliases = StationField.SYSTEM.aliases.map { Normalizer.normalizeHeader(it) }
     private val bandAliases = StationField.BAND.aliases.map { Normalizer.normalizeHeader(it) }
 
     /**
-     * 先映射其他字段，再单独处理「制式/频段」：优先「制式」列；没有时把「频段」列同时
-     * 用作制式识别来源。这样表头只写「频段」的台账也能自动对齐，且频段原始值仍会保存。
+     * 名称或覆盖类等字段一旦靠“包含”匹配到近似表头，就先作为建议交给用户按类别确认，
+     * 避免把“小区高度（米）”“带宽(MHz)”这类列悄悄错配。必填字段仍保持自动模糊匹配，
+     * 否则表头稍带单位就会阻断导入。
      */
-    fun autoDetect(header: List<String>): Map<StationField, Int> {
+    private val confirmFields: Set<StationField> = setOf(
+        StationField.SITE_NAME,
+        StationField.CELL_NAME,
+        StationField.CATEGORY,
+        StationField.ANTENNA_HEIGHT,
+        StationField.BANDWIDTH,
+        StationField.UPLINK_FREQ,
+        StationField.DOWNLINK_FREQ,
+        StationField.DEPLOYMENT,
+        StationField.AZIMUTH,
+        StationField.PCI,
+        StationField.MULTI_CARRIER,
+        StationField.ANTENNA_GAIN,
+        StationField.AAU_COUNT,
+        StationField.RRU_COUNT
+    )
+
+    private val normalizedAliases: Map<StationField, List<String>> by lazy {
+        StationField.entries.associateWith { field ->
+            field.aliases
+                .map { Normalizer.normalizeHeader(it) }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sortedByDescending { it.length }
+        }
+    }
+
+    /**
+     * 先对所有字段做精确匹配，再处理制式/频段，最后对需要确认的字段生成近似建议。
+     * 精确匹配优先可避免“上行频率”先被频段字段的包含匹配抢走。
+     */
+    fun detect(header: List<String>): ColumnDetection {
         val normalized = header.map { Normalizer.normalizeHeader(it) }
         val used = mutableSetOf<Int>()
         val result = linkedMapOf<StationField, Int>()
+        val fields = StationField.entries.filter { it != StationField.SYSTEM && it != StationField.BAND }
 
-        StationField.entries
-            .filter { it != StationField.SYSTEM && it != StationField.BAND }
-            .forEach { field ->
-                findColumn(normalized, field.aliases, used)?.let { index ->
-                    result[field] = index
-                    used.add(index)
-                }
+        fields.forEach { field ->
+            findExact(normalized, normalizedAliases.getValue(field), used)?.let { index ->
+                result[field] = index
+                used.add(index)
             }
+        }
 
         val systemIndex = findExact(normalized, systemAliases, used)
             ?: findFuzzy(normalized, systemAliases, used)
@@ -653,23 +705,47 @@ object ColumnMapping {
             ?: systemIndex?.takeIf { isFrequencyHeader(normalized.getOrNull(it)) }
         if (bandIndex != null) {
             result[StationField.BAND] = bandIndex
+            used.add(bandIndex)
         }
 
-        return result
+        fields
+            .filter { it !in result && it !in confirmFields }
+            .forEach { field ->
+                findFuzzy(normalized, normalizedAliases.getValue(field), used)?.let { index ->
+                    result[field] = index
+                    used.add(index)
+                }
+            }
+
+        val suggestedColumns = mutableSetOf<Int>()
+        val suggestions = mutableListOf<FieldSuggestion>()
+        fields
+            .filter { it in confirmFields && it !in result }
+            .forEach { field ->
+                val index = normalizedAliases.getValue(field).firstNotNullOfOrNull { alias ->
+                    normalized.indices.firstOrNull { idx ->
+                        val value = normalized[idx]
+                        idx !in used && idx !in suggestedColumns && value.isNotBlank() &&
+                            (value.contains(alias) || alias.contains(value))
+                    }
+                } ?: return@forEach
+                suggestedColumns.add(index)
+                suggestions.add(
+                    FieldSuggestion(
+                        field = field,
+                        column = index,
+                        header = header.getOrNull(index).orEmpty()
+                    )
+                )
+            }
+
+        return ColumnDetection(result, suggestions)
     }
+
+    fun autoDetect(header: List<String>): Map<StationField, Int> = detect(header).mapping
 
     fun missingRequired(mapping: Map<StationField, Int>): List<StationField> =
         StationField.entries.filter { it.required && !mapping.containsKey(it) }
-
-    private fun findColumn(
-        normalized: List<String>,
-        aliases: List<String>,
-        used: Set<Int>
-    ): Int? {
-        val normalizedAliases = aliases.map { Normalizer.normalizeHeader(it) }
-        return findExact(normalized, normalizedAliases, used)
-            ?: findFuzzy(normalized, normalizedAliases, used)
-    }
 
     private fun findExact(normalized: List<String>, aliases: List<String>, used: Set<Int>): Int? {
         aliases.forEach { alias ->
