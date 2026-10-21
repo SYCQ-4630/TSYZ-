@@ -14,8 +14,8 @@ android {
         applicationId = "com.selfuse.cellmap"
         minSdk = 24
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.0.8"
+        versionCode = 10
+        versionName = "1.0.9"
         multiDexEnabled = true
         vectorDrawables.useSupportLibrary = true
     }
@@ -33,6 +33,18 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    flavorDimensions += "platform"
+    productFlavors {
+        create("honor") {
+            dimension = "platform"
+            applicationId = "com.selfuse.cellmap.honor"
+        }
+        create("huawei") {
+            dimension = "platform"
+            applicationId = "com.selfuse.cellmap.huawei"
+        }
     }
 
     buildTypes {
