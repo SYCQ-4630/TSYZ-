@@ -14,8 +14,8 @@ android {
         applicationId = "com.selfuse.cellmap"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.0.7"
+        versionCode = 9
+        versionName = "1.0.8"
         multiDexEnabled = true
         vectorDrawables.useSupportLibrary = true
     }
@@ -47,6 +47,10 @@ android {
     }
 
     packaging {
+        jniLibs {
+            // 卓易通等虚拟容器对未解压 .so 的加载支持不稳定，改为安装时解压。
+            useLegacyPackaging = true
+        }
         resources {
             excludes += setOf(
                 "META-INF/DEPENDENCIES",

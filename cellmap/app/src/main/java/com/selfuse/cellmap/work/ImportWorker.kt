@@ -32,7 +32,7 @@ class ImportWorker(
         var batchId = 0L
         var lastPercent = -1
         try {
-            setForeground(
+            val hasForeground = setForegroundQuietly(
                 TaskNotifications.foregroundInfo(
                     applicationContext,
                     TaskType.IMPORT,
@@ -41,6 +41,14 @@ class ImportWorker(
                     null
                 )
             )
+            if (!hasForeground) {
+                c.logger.log(
+                    LogModule.IMPORT,
+                    LogLevel.WARN,
+                    "前台通知不可用",
+                    "继续在后台导入，离开应用可能被系统暂停"
+                )
+            }
             c.logger.log(LogModule.IMPORT, LogLevel.INFO, "开始导入 ${spec.fileName}", spec.filePath)
             val version = c.readiness.dataVersion()
             batchId = c.importRepository.ensureBatch(spec, version)
@@ -64,7 +72,7 @@ class ImportWorker(
                     val percent = progress.percent
                     if (percent != null && (lastPercent < 0 || percent - lastPercent >= 5)) {
                         lastPercent = percent
-                        setForegroundAsync(
+                        updateForegroundQuietly(
                             TaskNotifications.foregroundInfo(
                                 applicationContext,
                                 TaskType.IMPORT,

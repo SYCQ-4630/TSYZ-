@@ -64,7 +64,8 @@ data class MapUiState(
     val zoom: Double = 4.0,
     val focus: FocusRequest? = null,
     val message: String? = null,
-    val annotationsVisible: Boolean = true
+    val annotationsVisible: Boolean = true,
+    val textureMode: Boolean = false
 ) {
     val canRender: Boolean get() = readiness.dataReady && readiness.labelReady
 }
@@ -94,6 +95,11 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                     refreshBasemap()
                 }
                 reloadViewport()
+            }
+        }
+        viewModelScope.launch {
+            c.prefs.mapTextureModeFlow.collect { enabled ->
+                _state.update { it.copy(textureMode = enabled) }
             }
         }
         refreshBasemap()
@@ -308,6 +314,13 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     fun setAnnotationsVisible(visible: Boolean) {
         if (_state.value.annotationsVisible == visible) return
         _state.update { it.copy(annotationsVisible = visible) }
+    }
+
+    fun setTextureMode(enabled: Boolean) {
+        viewModelScope.launch {
+            c.prefs.setMapTextureMode(enabled)
+            _state.update { it.copy(message = "渲染模式已切换，重新进入地图生效") }
+        }
     }
 
     private fun focus(lat: Double, lon: Double, zoom: Double) {

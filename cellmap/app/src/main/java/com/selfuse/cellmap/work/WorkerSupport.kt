@@ -5,14 +5,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ForegroundInfo
 import com.selfuse.cellmap.MainActivity
 import com.selfuse.cellmap.R
 import com.selfuse.cellmap.core.model.TaskType
+import kotlinx.coroutines.CancellationException
 import java.io.IOException
 
 object WorkerKeys {
@@ -54,13 +57,18 @@ object TaskNotifications {
     private const val CHANNEL_NAME = "后台任务"
 
     fun ensureChannel(context: Context) {
-        val manager = NotificationManagerCompat.from(context)
-        val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
-            .setName(CHANNEL_NAME)
-            .setDescription(context.getString(R.string.notification_channel_tasks_desc))
-            .setShowBadge(false)
-            .build()
-        manager.createNotificationChannel(channel)
+        runCatching {
+            val manager = NotificationManagerCompat.from(context)
+            val channel = NotificationChannelCompat.Builder(
+                CHANNEL_ID,
+                NotificationManagerCompat.IMPORTANCE_LOW
+            )
+                .setName(CHANNEL_NAME)
+                .setDescription(context.getString(R.string.notification_channel_tasks_desc))
+                .setShowBadge(false)
+                .build()
+            manager.createNotificationChannel(channel)
+        }.onFailure { Log.w("CellMapWorker", "Unable to create notification channel", it) }
     }
 
     fun foregroundInfo(
@@ -98,4 +106,24 @@ object TaskNotifications {
             ForegroundInfo(id, notification)
         }
     }
+}
+
+
+/**
+ * 卓易通等容器可能禁止启动前台服务或关闭通知权限。前台通知失败时继续执行任务，
+ * 避免整个导入/标注/优化直接失败。
+ */
+suspend fun CoroutineWorker.setForegroundQuietly(info: ForegroundInfo): Boolean = try {
+    setForeground(info)
+    true
+} catch (cancel: CancellationException) {
+    throw cancel
+} catch (error: Throwable) {
+    Log.w("CellMapWorker", "Foreground service unavailable", error)
+    false
+}
+
+fun CoroutineWorker.updateForegroundQuietly(info: ForegroundInfo) {
+    runCatching { setForegroundAsync(info) }
+        .onFailure { Log.w("CellMapWorker", "Unable to update foreground notification", it) }
 }

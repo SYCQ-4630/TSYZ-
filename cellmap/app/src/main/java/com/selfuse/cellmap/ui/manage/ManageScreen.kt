@@ -57,6 +57,7 @@ import com.selfuse.cellmap.data.db.ImportBatchEntity
 import com.selfuse.cellmap.data.db.LogLevel
 import com.selfuse.cellmap.data.db.OptimizationRunEntity
 import com.selfuse.cellmap.data.db.OptimizationStatus
+import com.selfuse.cellmap.diagnostics.CrashDiagnostics
 import com.selfuse.cellmap.ui.components.AppTopBar
 import com.selfuse.cellmap.ui.components.ConfirmDialog
 import com.selfuse.cellmap.ui.components.DividerSpacer
@@ -157,7 +158,11 @@ fun ManageScreen(
                         onDeleteBatch = { pendingDelete = it }
                     )
                     3 -> RisksTab(state = state, onAction = handleRisk)
-                    else -> LogsTab(state = state, onClear = vm::clearLogs)
+                    else -> LogsTab(
+                        state = state,
+                        onClear = vm::clearLogs,
+                        onExport = { CrashDiagnostics.share(context) }
+                    )
                 }
             }
         }
@@ -471,7 +476,11 @@ private fun RisksTab(state: ManageUiState, onAction: (RiskItem) -> Unit) {
 }
 
 @Composable
-private fun LogsTab(state: ManageUiState, onClear: () -> Unit) {
+private fun LogsTab(
+    state: ManageUiState,
+    onClear: () -> Unit,
+    onExport: () -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -484,6 +493,10 @@ private fun LogsTab(state: ManageUiState, onClear: () -> Unit) {
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f)
                 )
+                OutlinedButton(onClick = onExport) {
+                    Text("导出诊断")
+                }
+                Spacer(Modifier.width(6.dp))
                 OutlinedButton(onClick = onClear, enabled = state.logs.isNotEmpty()) {
                     Text("清空日志")
                 }

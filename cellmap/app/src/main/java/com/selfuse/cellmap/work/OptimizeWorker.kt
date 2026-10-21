@@ -19,7 +19,7 @@ class OptimizeWorker(
         val app = applicationContext as CellMapApp
         val c = app.container
         try {
-            setForeground(
+            val hasForeground = setForegroundQuietly(
                 TaskNotifications.foregroundInfo(
                     applicationContext,
                     TaskType.OPTIMIZE,
@@ -28,13 +28,21 @@ class OptimizeWorker(
                     null
                 )
             )
+            if (!hasForeground) {
+                c.logger.log(
+                    LogModule.OPTIMIZE,
+                    LogLevel.WARN,
+                    "前台通知不可用",
+                    "继续在后台优化，离开应用可能被系统暂停"
+                )
+            }
             val version = c.readiness.dataVersion()
             val summary = c.optimizationRepository.run(
                 dataVersion = version,
                 isCancelled = { isStopped },
                 onProgress = { progress ->
                     setProgressAsync(progressData(progress.percent, progress.phase))
-                    setForegroundAsync(
+                    updateForegroundQuietly(
                         TaskNotifications.foregroundInfo(
                             applicationContext,
                             TaskType.OPTIMIZE,

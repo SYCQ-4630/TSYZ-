@@ -104,10 +104,21 @@ class AppPreferences(context: Context) {
 
     val dataVersionFlow: Flow<Int> = store.data.map { it[DATA_VERSION] ?: 0 }.distinctUntilChanged()
 
+    /**
+     * 兼容渲染开关：容器或远程渲染环境里 SurfaceView 可能黑屏，开启后改用纹理模式。
+     */
+    val mapTextureModeFlow: Flow<Boolean> = store.data
+        .map { it[MAP_TEXTURE_MODE] ?: false }
+        .distinctUntilChanged()
+
     suspend fun readiness(): ReadinessState = readinessFlow.first()
     suspend fun keys(): List<StoredKeyRecord> = keysFlow.first()
     suspend fun importSpec(): ImportSpec? = importSpecFlow.first()
     suspend fun dataVersion(): Int = dataVersionFlow.first()
+
+    suspend fun setMapTextureMode(enabled: Boolean) {
+        store.edit { it[MAP_TEXTURE_MODE] = enabled }
+    }
 
     suspend fun setKeyReady(value: Boolean) {
         store.edit { it[KEY_READY] = value }
@@ -229,5 +240,6 @@ class AppPreferences(context: Context) {
         val OPTIMIZATION_VERSION = intPreferencesKey("optimization_version")
         val LAST_IMPORTED_AT = longPreferencesKey("last_imported_at")
         val DAILY_REFRESH_DATE = stringPreferencesKey("daily_refresh_date")
+        val MAP_TEXTURE_MODE = booleanPreferencesKey("map_texture_mode")
     }
 }

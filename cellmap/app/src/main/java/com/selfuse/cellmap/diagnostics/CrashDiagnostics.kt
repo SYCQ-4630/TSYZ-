@@ -6,6 +6,7 @@ import android.app.Application
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -14,6 +15,7 @@ import android.provider.MediaStore
 import android.system.Os
 import android.system.OsConstants
 import android.util.Log
+import androidx.core.content.FileProvider
 import com.selfuse.cellmap.BuildConfig
 import java.io.File
 import java.io.FileOutputStream
@@ -49,6 +51,28 @@ object CrashDiagnostics {
             { runCatching { captureExitInfo(app) } },
             "cellmap-diagnostics"
         ).apply { isDaemon = true }.start()
+    }
+
+    /**
+     * 通过系统分享导出诊断文本。容器环境里 MediaStore 写入的 Download 目录
+     * 可能不可见，用分享可以直接发到文件管理器或聊天工具。
+     */
+    fun share(context: Context) {
+        val text = runCatching { buildReport(context) }
+            .getOrElse { "无法生成诊断报告：${it.message}" }
+        runCatching {
+            val dir = File(context.cacheDir, "share").apply { mkdirs() }
+            val file = File(dir, DOWNLOAD_FILE_NAME).apply { writeText(text) }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "CellMap diagnostics")
+                putExtra(Intent.EXTRA_TEXT, text.take(4000))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(send, "导出诊断日志"))
+        }.onFailure { Log.e(TAG, "Unable to share diagnostics", it) }
     }
 
     fun log(context: Context, step: String) {

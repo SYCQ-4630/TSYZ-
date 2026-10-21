@@ -19,7 +19,7 @@ class LabelWorker(
         val app = applicationContext as CellMapApp
         val c = app.container
         try {
-            setForeground(
+            val hasForeground = setForegroundQuietly(
                 TaskNotifications.foregroundInfo(
                     applicationContext,
                     TaskType.LABEL,
@@ -28,12 +28,20 @@ class LabelWorker(
                     null
                 )
             )
+            if (!hasForeground) {
+                c.logger.log(
+                    LogModule.LABEL,
+                    LogLevel.WARN,
+                    "前台通知不可用",
+                    "继续在后台生成标注，离开应用可能被系统暂停"
+                )
+            }
             c.readiness.beginLabelRun()
             val result = c.labelRepository.run(
                 isCancelled = { isStopped },
                 onProgress = { percent, processed, total, message ->
                     setProgressAsync(progressData(percent, message))
-                    setForegroundAsync(
+                    updateForegroundQuietly(
                         TaskNotifications.foregroundInfo(
                             applicationContext,
                             TaskType.LABEL,

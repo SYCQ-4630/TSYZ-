@@ -92,6 +92,7 @@ import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression.get
@@ -115,6 +116,7 @@ import org.maplibre.android.style.layers.PropertyFactory.textSize
 import org.maplibre.android.style.layers.PropertyFactory.visibility
 import org.maplibre.android.style.sources.GeoJsonSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
@@ -150,7 +152,11 @@ fun MapScreen(onBack: () -> Unit) {
         }
         runCatching {
             CrashDiagnostics.log(context, "MapScreen creating MapView")
-            MapView(context).apply { onCreate(null) }
+            val textureMode = runCatching {
+                app.container.prefs.mapTextureModeFlow.first()
+            }.getOrDefault(false)
+            val options = MapLibreMapOptions().textureMode(textureMode)
+            MapView(context, options).apply { onCreate(null) }
         }.onSuccess { mapView = it }
             .onFailure {
                 CrashDiagnostics.log(context, "MapView creation failed: $it")
@@ -493,6 +499,7 @@ fun MapScreen(onBack: () -> Unit) {
             onBand = vm::setBand,
             onClear = vm::clearFilters,
             onToggleAnnotations = vm::setAnnotationsVisible,
+            onToggleTexture = vm::setTextureMode,
             onDismiss = { showFilters = false }
         )
     }
@@ -663,6 +670,7 @@ private fun FilterSheet(
     onBand: (String) -> Unit,
     onClear: () -> Unit,
     onToggleAnnotations: (Boolean) -> Unit,
+    onToggleTexture: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -723,6 +731,21 @@ private fun FilterSheet(
                 Switch(
                     checked = state.annotationsVisible,
                     onCheckedChange = onToggleAnnotations
+                )
+            }
+            SectionHeader("兼容渲染")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("纹理模式", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "地图黑屏或闪烁时开启，重新进入地图生效",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.textureMode,
+                    onCheckedChange = onToggleTexture
                 )
             }
             Spacer(Modifier.height(4.dp))
