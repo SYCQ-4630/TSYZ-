@@ -12,14 +12,12 @@ import com.selfuse.cellmap.data.prefs.AppPreferences
 import com.selfuse.cellmap.work.WorkScheduler
 import com.selfuse.cellmap.work.WorkerKeys
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 class TaskCenterRepository(
@@ -31,19 +29,18 @@ class TaskCenterRepository(
 ) {
     private val workManager = WorkManager.getInstance(context)
 
-    fun observeTasks(): Flow<List<TaskItem>> = flow {
-        while (currentCoroutineContext().isActive) {
-            val spec = prefs.importSpec()
-            val infos = runCatching { workManager.getWorkInfosByTagFlow(WorkScheduler.TAG_ALL).first() }
-                .getOrDefault(emptyList())
-            val tasks = infos.mapNotNull { info -> info.toTaskItem(importResumable = spec != null) }
-                .groupBy { it.type }
-                .map { (_, list) -> list.minByOrNull { statusPriority(it.status) } ?: list.first() }
-                .sortedBy { statusPriority(it.status) }
-            emit(tasks)
-            val active = tasks.any { it.active }
-            delay(if (active) 900L else 2_500L)
-        }
+    /**
+     * 由 WorkManager 的数据变更推送任务状态，替代定时轮询，避免主页持续的
+     * 后台查询与无意义重组。
+     */
+    fun observeTasks(): Flow<List<TaskItem>> = combine(
+        workManager.getWorkInfosByTagFlow(WorkScheduler.TAG_ALL),
+        prefs.importSpecFlow
+    ) { infos, spec ->
+        infos.mapNotNull { info -> info.toTaskItem(importResumable = spec != null) }
+            .groupBy { it.type }
+            .map { (_, list) -> list.minByOrNull { statusPriority(it.status) } ?: list.first() }
+            .sortedBy { statusPriority(it.status) }
     }.flowOn(Dispatchers.IO).distinctUntilChanged()
 
     suspend fun latest(type: TaskType): WorkInfo? = withContext(Dispatchers.IO) {

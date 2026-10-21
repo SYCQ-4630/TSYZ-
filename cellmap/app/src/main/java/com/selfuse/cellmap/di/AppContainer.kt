@@ -64,6 +64,7 @@ class AppContainer(context: Context) {
     val baseMapProvider = BaseMapProvider(keyRepository, tiles, logger)
 
     fun start() {
+        runCatching { scheduler.enqueueDailyRefresh() }
         applicationScope.launch {
             runCatching { logger.prune() }
             runCatching { keyRepository.reconcile() }

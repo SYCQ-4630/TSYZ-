@@ -5,14 +5,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExpandLess
@@ -73,6 +74,7 @@ fun HomeScreen(
     val app = LocalContext.current.applicationContext as CellMapApp
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.factory(app))
     val state by vm.state.collectAsStateWithLifecycle()
+    val importStatus by vm.importStatus.collectAsStateWithLifecycle()
 
     var tasksExpanded by rememberSaveable { mutableStateOf(false) }
     var showMissingDialog by remember { mutableStateOf(false) }
@@ -114,155 +116,123 @@ fun HomeScreen(
             }
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            ReadinessCard(
-                keyReady = state.readiness.keyReady,
-                dataReady = state.readiness.dataReady,
-                labelReady = state.readiness.labelReady,
-                finishedSteps = state.readiness.finishedSteps
-            )
-
-            ModuleCard(
-                title = "天地图 Key",
-                summary = state.keySummary,
-                statusText = when {
-                    state.verifiedKeys > 0 -> "可用"
-                    state.keys.isNotEmpty() -> "待验证"
-                    else -> "未配置"
-                },
-                statusColor = when {
-                    state.verifiedKeys > 0 -> RiskLow
-                    state.keys.isNotEmpty() -> RiskMedium
-                    else -> RiskHigh
-                },
-                icon = Icons.Filled.Key,
-                onClick = onOpenKeys
-            )
-
-            ModuleCard(
-                title = "XLSX 数据导入",
-                summary = state.dataSummary,
-                statusText = when {
-                    state.importTask?.status == TaskStatus.RUNNING -> "导入中"
-                    state.latestBatch?.status == "FAILED" -> "上次失败"
-                    state.readiness.dataReady -> "已就绪"
-                    else -> "未导入"
-                },
-                statusColor = when {
-                    state.importTask?.status == TaskStatus.RUNNING -> MaterialTheme.colorScheme.primary
-                    state.latestBatch?.status == "FAILED" -> RiskHigh
-                    state.readiness.dataReady -> RiskLow
-                    else -> RiskMedium
-                },
-                icon = Icons.Filled.UploadFile,
-                onClick = onOpenImport,
-                footnote = state.latestBatch?.let {
-                    "${it.fileName} · 成功 ${it.successRows} / 总 ${it.totalRows} · 失败 ${it.failedRows}"
-                }
-            )
-
-            ModuleCard(
-                title = "分类标注",
-                summary = state.labelSummary,
-                statusText = when {
-                    state.readiness.labelReady -> "已启用"
-                    state.labelStats.unclassified > 0 -> "待确认"
-                    else -> "未完成"
-                },
-                statusColor = when {
-                    state.readiness.labelReady -> RiskLow
-                    state.labelStats.unclassified > 0 -> RiskMedium
-                    else -> RiskMedium
-                },
-                icon = Icons.Filled.Palette,
-                onClick = onOpenLabels,
-                footnote = if (state.labelStats.total > 0) {
-                    "联通共享 ${state.labelStats.unicomShared} · 电信共享 ${state.labelStats.telecomShared} · " +
-                        "联通未共享 ${state.labelStats.unicomPrivate} · 电信未共享 ${state.labelStats.telecomPrivate}"
-                } else {
-                    null
-                }
-            )
-
-            ModuleCard(
-                title = "压缩优化与数据维护",
-                summary = state.optimizeSummary,
-                statusText = if (state.readiness.optimizeReady) "已启用" else "原始数据",
-                statusColor = if (state.readiness.optimizeReady) RiskLow else RiskMedium,
-                icon = Icons.Filled.Tune,
-                onClick = onOpenManage,
-                footnote = state.optimization?.let {
-                    "点位 ${it.markerCount} · 聚类 ${it.clusterCount} · 分块 ${it.chunkCount}"
-                }
-            )
-
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+            item(key = "readiness") {
+                ReadinessCard(
+                    keyReady = state.readiness.keyReady,
+                    dataReady = state.readiness.dataReady,
+                    labelReady = state.readiness.labelReady,
+                    finishedSteps = state.readiness.finishedSteps
                 )
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { tasksExpanded = !tasksExpanded },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "任务中心",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        val active = state.tasks.count { it.active }
-                        if (active > 0) {
-                            StatusPill("$active 个进行中", MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(6.dp))
-                        }
-                        if (state.failedTasks > 0) {
-                            StatusPill("${state.failedTasks} 个失败", RiskHigh)
-                            Spacer(Modifier.width(6.dp))
-                        }
-                        Icon(
-                            if (tasksExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = if (tasksExpanded) "收起" else "展开"
-                        )
-                    }
-                    DividerSpacer()
-                    val visible = if (tasksExpanded) {
-                        state.tasks
-                    } else {
-                        state.tasks.filter { it.active || it.status == TaskStatus.FAILED }
-                    }
-                    if (visible.isEmpty()) {
-                        EmptyHint("暂无后台任务")
-                    } else {
-                        visible.forEachIndexed { index, task ->
-                            if (index > 0) DividerSpacer()
-                            TaskRow(
-                                task = task,
-                                onPause = { vm.pause(task.type) },
-                                onCancel = { vm.cancel(task.type) },
-                                onRetry = { vm.retry(task.type) }
-                            )
-                        }
-                    }
-                }
             }
 
-            Spacer(Modifier.height(4.dp))
-            SectionHeader("使用顺序")
-            Text(
-                "Key 与数据相互独立；标注依赖已导入数据；地图查询需要 Key、数据与标注确认三项同时就绪。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(8.dp))
+            item(key = "keys") {
+                ModuleCard(
+                    title = "天地图 Key",
+                    summary = state.keySummary,
+                    statusText = when {
+                        state.verifiedKeys > 0 -> "可用"
+                        state.keys.isNotEmpty() -> "待验证"
+                        else -> "未配置"
+                    },
+                    statusColor = when {
+                        state.verifiedKeys > 0 -> RiskLow
+                        state.keys.isNotEmpty() -> RiskMedium
+                        else -> RiskHigh
+                    },
+                    icon = Icons.Filled.Key,
+                    onClick = onOpenKeys
+                )
+            }
+
+            item(key = "import") {
+                ModuleCard(
+                    title = "XLSX 数据导入",
+                    summary = state.dataSummary,
+                    statusText = when {
+                        importStatus == TaskStatus.RUNNING -> "导入中"
+                        state.latestBatch?.status == "FAILED" -> "上次失败"
+                        state.readiness.dataReady -> "已就绪"
+                        else -> "未导入"
+                    },
+                    statusColor = when {
+                        importStatus == TaskStatus.RUNNING -> MaterialTheme.colorScheme.primary
+                        state.latestBatch?.status == "FAILED" -> RiskHigh
+                        state.readiness.dataReady -> RiskLow
+                        else -> RiskMedium
+                    },
+                    icon = Icons.Filled.UploadFile,
+                    onClick = onOpenImport,
+                    footnote = state.latestBatch?.let {
+                        "${it.fileName} · 成功 ${it.successRows} / 总 ${it.totalRows} · 失败 ${it.failedRows}"
+                    }
+                )
+            }
+
+            item(key = "labels") {
+                ModuleCard(
+                    title = "分类标注",
+                    summary = state.labelSummary,
+                    statusText = when {
+                        state.readiness.labelReady -> "已启用"
+                        state.labelStats.unclassified > 0 -> "待确认"
+                        else -> "未完成"
+                    },
+                    statusColor = when {
+                        state.readiness.labelReady -> RiskLow
+                        state.labelStats.unclassified > 0 -> RiskMedium
+                        else -> RiskMedium
+                    },
+                    icon = Icons.Filled.Palette,
+                    onClick = onOpenLabels,
+                    footnote = if (state.labelStats.total > 0) {
+                        "联通共享 ${state.labelStats.unicomShared} · 电信共享 ${state.labelStats.telecomShared} · " +
+                            "联通未共享 ${state.labelStats.unicomPrivate} · 电信未共享 ${state.labelStats.telecomPrivate}"
+                    } else {
+                        null
+                    }
+                )
+            }
+
+            item(key = "optimize") {
+                ModuleCard(
+                    title = "压缩优化与数据维护",
+                    summary = state.optimizeSummary,
+                    statusText = if (state.readiness.optimizeReady) "已启用" else "原始数据",
+                    statusColor = if (state.readiness.optimizeReady) RiskLow else RiskMedium,
+                    icon = Icons.Filled.Tune,
+                    onClick = onOpenManage,
+                    footnote = state.optimization?.let {
+                        "点位 ${it.markerCount} · 聚类 ${it.clusterCount} · 分块 ${it.chunkCount}"
+                    }
+                )
+            }
+
+            item(key = "tasks") {
+                TaskCenterSection(
+                    vm = vm,
+                    expanded = tasksExpanded,
+                    onToggle = { tasksExpanded = !tasksExpanded }
+                )
+            }
+
+            item(key = "usage") {
+                Column {
+                    SectionHeader("使用顺序")
+                    Text(
+                        "Key 与数据相互独立；标注依赖已导入数据；地图查询需要 Key、数据与标注确认三项同时就绪。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
         }
     }
 
@@ -294,6 +264,67 @@ fun HomeScreen(
                 TextButton(onClick = { showMissingDialog = false; onOpenMap() }) { Text("仍然进入") }
             }
         )
+    }
+}
+
+@Composable
+private fun TaskCenterSection(
+    vm: HomeViewModel,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val tasks by vm.tasks.collectAsStateWithLifecycle()
+    val active = remember(tasks) { tasks.count { it.active } }
+    val failed = remember(tasks) { tasks.count { it.status == TaskStatus.FAILED } }
+    val visible = remember(tasks, expanded) {
+        if (expanded) tasks else tasks.filter { it.active || it.status == TaskStatus.FAILED }
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "任务中心",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                if (active > 0) {
+                    StatusPill("$active 个进行中", MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (failed > 0) {
+                    StatusPill("$failed 个失败", RiskHigh)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Icon(
+                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (expanded) "收起" else "展开"
+                )
+            }
+            DividerSpacer()
+            if (visible.isEmpty()) {
+                EmptyHint("暂无后台任务")
+            } else {
+                visible.forEachIndexed { index, task ->
+                    if (index > 0) DividerSpacer()
+                    TaskRow(
+                        task = task,
+                        onPause = { vm.pause(task.type) },
+                        onCancel = { vm.cancel(task.type) },
+                        onRetry = { vm.retry(task.type) }
+                    )
+                }
+            }
+        }
     }
 }
 

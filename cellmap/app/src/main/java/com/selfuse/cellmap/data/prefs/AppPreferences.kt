@@ -46,22 +46,6 @@ data class ImportSpec(
 )
 
 @Serializable
-data class StoredMapState(
-    val centerLat: Double = 34.5,
-    val centerLon: Double = 108.9,
-    val zoom: Double = 4.0,
-    val system: String = "FOUR_G",
-    val styles: List<String> = emptyList(),
-    val district: String = "",
-    val band: String = "",
-    val category: String = "",
-    val query: String = "",
-    val selectedId: Long = 0L,
-    val annotationsVisible: Boolean = true,
-    val savedAt: Long = 0L
-)
-
-@Serializable
 data class LabelRunState(
     val total: Int = 0,
     val classified: Int = 0,
@@ -217,13 +201,18 @@ class AppPreferences(context: Context) {
 
     suspend fun lastImportedAt(): Long = store.data.first()[LAST_IMPORTED_AT] ?: 0L
 
-    suspend fun mapState(): StoredMapState? {
-        val raw = store.data.first()[MAP_STATE_JSON] ?: return null
-        return runCatching { json.decodeFromString<StoredMapState>(raw) }.getOrNull()
-    }
-
-    suspend fun saveMapState(state: StoredMapState) {
-        store.edit { it[MAP_STATE_JSON] = json.encodeToString(state) }
+    /**
+     * 原子领取当天首次刷新：同一天只允许一个调用方拿到 true。
+     */
+    suspend fun claimDailyRefresh(date: String): Boolean {
+        var claimed = false
+        store.edit { data ->
+            if (data[DAILY_REFRESH_DATE] != date) {
+                data[DAILY_REFRESH_DATE] = date
+                claimed = true
+            }
+        }
+        return claimed
     }
 
     private companion object {
@@ -239,6 +228,6 @@ class AppPreferences(context: Context) {
         val DATA_VERSION = intPreferencesKey("data_version")
         val OPTIMIZATION_VERSION = intPreferencesKey("optimization_version")
         val LAST_IMPORTED_AT = longPreferencesKey("last_imported_at")
-        val MAP_STATE_JSON = stringPreferencesKey("map_state_json")
+        val DAILY_REFRESH_DATE = stringPreferencesKey("daily_refresh_date")
     }
 }

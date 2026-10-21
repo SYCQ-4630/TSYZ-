@@ -12,6 +12,7 @@ import com.selfuse.cellmap.core.model.LabelStats
 import com.selfuse.cellmap.core.model.OptimizationSummary
 import com.selfuse.cellmap.core.model.ReadinessState
 import com.selfuse.cellmap.core.model.TaskItem
+import com.selfuse.cellmap.core.model.TaskStatus
 import com.selfuse.cellmap.core.model.TaskType
 import com.selfuse.cellmap.data.db.BatchStatus
 import com.selfuse.cellmap.data.db.ImportBatchEntity
@@ -20,6 +21,8 @@ import com.selfuse.cellmap.data.db.toSummary
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -31,7 +34,6 @@ data class HomeUiState(
     val latestBatch: ImportSummary? = null,
     val labelStats: LabelStats = LabelStats(),
     val optimization: OptimizationSummary? = null,
-    val tasks: List<TaskItem> = emptyList(),
     val dataVersion: Int = 0
 ) {
     val verifiedKeys: Int get() = keys.count { it.verified }
@@ -52,10 +54,6 @@ data class HomeUiState(
             optimization == null -> "未优化"
             else -> "未优化"
         }
-    val importTask: TaskItem? get() = tasks.firstOrNull { it.type == TaskType.IMPORT }
-    val labelTask: TaskItem? get() = tasks.firstOrNull { it.type == TaskType.LABEL }
-    val optimizeTask: TaskItem? get() = tasks.firstOrNull { it.type == TaskType.OPTIMIZE }
-    val failedTasks: Int get() = tasks.count { it.status == com.selfuse.cellmap.core.model.TaskStatus.FAILED }
 }
 
 private data class HomeCore(
@@ -63,7 +61,6 @@ private data class HomeCore(
     val keys: List<KeyUi>,
     val labelStats: LabelStats,
     val latestBatch: ImportBatchEntity?,
-    val tasks: List<TaskItem>,
     val dataVersion: Int
 )
 
@@ -74,11 +71,21 @@ class HomeViewModel(app: CellMapApp) : ViewModel() {
         c.readiness.state,
         c.keyRepository.keys,
         c.prefs.labelStatsFlow,
-        c.importRepository.latestBatch,
-        c.taskCenter.observeTasks()
-    ) { readiness, keys, labels, batch, tasks ->
-        HomeCore(readiness, keys, labels, batch, tasks, 0)
+        c.importRepository.latestBatch
+    ) { readiness, keys, labels, batch ->
+        HomeCore(readiness, keys, labels, batch, 0)
     }
+
+    /**
+     * 任务列表单独暴露，避免进度刷新时驱动整个首页重组。
+     */
+    val tasks: StateFlow<List<TaskItem>> = c.taskCenter.observeTasks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val importStatus: StateFlow<TaskStatus?> = tasks
+        .map { list -> list.firstOrNull { it.type == TaskType.IMPORT }?.status }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val state: StateFlow<HomeUiState> = combine(
         core,
@@ -92,8 +99,7 @@ class HomeViewModel(app: CellMapApp) : ViewModel() {
             stationCount = count,
             latestBatch = core.latestBatch?.toSummary(),
             labelStats = core.labelStats,
-            optimization = success?.toSummary(),
-            tasks = core.tasks
+            optimization = success?.toSummary()
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 

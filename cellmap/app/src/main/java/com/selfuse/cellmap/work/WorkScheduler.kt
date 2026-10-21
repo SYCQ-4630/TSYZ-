@@ -50,6 +50,17 @@ class WorkScheduler(
         workManager.enqueueUniqueWork(TaskType.OPTIMIZE.workName, ExistingWorkPolicy.KEEP, request)
     }
 
+    /**
+     * 每天首次启动时执行一次本地维护。Worker 内部按日期去重，
+     * 同一天重复调度只会做一次实际工作。
+     */
+    fun enqueueDailyRefresh() {
+        val request = OneTimeWorkRequestBuilder<DailyRefreshWorker>()
+            .addTag(TAG_DAILY_REFRESH)
+            .build()
+        workManager.enqueueUniqueWork(WORK_DAILY_REFRESH, ExistingWorkPolicy.KEEP, request)
+    }
+
     suspend fun cancel(type: TaskType) {
         workManager.cancelUniqueWork(type.workName).await()
     }
@@ -68,5 +79,7 @@ class WorkScheduler(
 
     companion object {
         const val TAG_ALL = "cellmap"
+        const val TAG_DAILY_REFRESH = "cellmap-daily-refresh"
+        const val WORK_DAILY_REFRESH = "cellmap_daily_refresh"
     }
 }
