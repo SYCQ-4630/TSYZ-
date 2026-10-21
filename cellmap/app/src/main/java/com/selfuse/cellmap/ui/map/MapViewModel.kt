@@ -24,6 +24,7 @@ import com.selfuse.cellmap.data.key.ProbeResult
 import com.selfuse.cellmap.data.key.SessionKey
 import com.selfuse.cellmap.map.DenseGroups
 import com.selfuse.cellmap.map.GeoJsonBuilder
+import com.selfuse.cellmap.map.SectorLabelIcon
 import com.selfuse.cellmap.map.SectorOverlay
 import com.selfuse.cellmap.map.TempMarkerOverlay
 import com.selfuse.cellmap.data.repo.TemporaryMarkerStore
@@ -89,6 +90,8 @@ data class MapUiState(
     val selectedSectorActive: Boolean = false,
     val sectorJson: String = "",
     val sectorLabelJson: String = "",
+    val sectorLeaderJson: String = "",
+    val sectorIcons: List<SectorLabelIcon> = emptyList(),
     val tempMarkers: List<TempMarker> = emptyList(),
     val tempJson: String = ""
 ) {
@@ -171,6 +174,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 selectedSectorActive = false,
                 sectorJson = "",
                 sectorLabelJson = "",
+                sectorLeaderJson = "",
+                sectorIcons = emptyList(),
                 denseGroups = emptyList(),
                 denseJson = ""
             )
@@ -345,6 +350,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 selectedSectorActive = false,
                 sectorJson = "",
                 sectorLabelJson = "",
+                sectorLeaderJson = "",
+                sectorIcons = emptyList(),
                 denseGroups = emptyList(),
                 denseJson = ""
             )
@@ -543,7 +550,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     fun clearSectors() {
         if (sectorGroups.isEmpty() &&
             _state.value.sectorJson.isBlank() &&
-            _state.value.sectorLabelJson.isBlank()
+            _state.value.sectorLabelJson.isBlank() &&
+            _state.value.sectorLeaderJson.isBlank()
         ) return
         selectionSeq += 1
         sectorGroups.clear()
@@ -556,7 +564,9 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 sectorTotal = 0,
                 selectedSectorActive = false,
                 sectorJson = "",
-                sectorLabelJson = ""
+                sectorLabelJson = "",
+                sectorLeaderJson = "",
+                sectorIcons = emptyList()
             )
         }
     }
@@ -565,19 +575,25 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     private suspend fun rebuildSectors(): Boolean {
         val generation = ++sectorGeneration
         val cells = sectorGroups.values.flatMap { it.cells }
-        val (json, labelJson) = if (cells.isEmpty()) {
-            "" to ""
+        val built = if (cells.isEmpty()) {
+            SectorBuild()
         } else withContext(Dispatchers.Default) {
-            val shapes = runCatching { SectorOverlay.geoJson(cells) }.getOrDefault("")
-            val labels = runCatching { SectorOverlay.labelGeoJson(cells) }.getOrDefault("")
-            shapes to labels
+            val render = runCatching { SectorOverlay.render(cells) }.getOrNull()
+            SectorBuild(
+                shapes = runCatching { SectorOverlay.geoJson(cells) }.getOrDefault(""),
+                labels = render?.labelJson.orEmpty(),
+                leaders = render?.leaderJson.orEmpty(),
+                icons = render?.icons.orEmpty()
+            )
         }
         if (generation != sectorGeneration) return _state.value.sectorVisible
-        val visible = json.isNotBlank()
+        val visible = built.shapes.isNotBlank()
         _state.update {
             it.copy(
-                sectorJson = json,
-                sectorLabelJson = labelJson,
+                sectorJson = built.shapes,
+                sectorLabelJson = built.labels,
+                sectorLeaderJson = built.leaders,
+                sectorIcons = built.icons,
                 sectorVisible = visible,
                 sectorTotal = if (visible) cells.size else 0
             )
@@ -589,6 +605,13 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
         SectorGeometry.positionKey(lat, lon)
 
     private data class SectorGroup(val cells: List<SectorCell>)
+
+    private data class SectorBuild(
+        val shapes: String = "",
+        val labels: String = "",
+        val leaders: String = "",
+        val icons: List<SectorLabelIcon> = emptyList()
+    )
 
     private fun sectorRadiusMeters(lat: Double): Double {
         val zoom = cameraZoom.coerceIn(3.0, 20.0)

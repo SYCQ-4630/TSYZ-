@@ -114,6 +114,7 @@ import com.selfuse.cellmap.map.MapLibreRuntime
 import com.selfuse.cellmap.map.MarkerIconCache
 import com.selfuse.cellmap.map.MarkerRings
 import com.selfuse.cellmap.map.MarkerScaling
+import com.selfuse.cellmap.map.SectorLabelIcons
 import com.selfuse.cellmap.map.TempMarkerIcons
 import com.selfuse.cellmap.map.TempMarkerOverlay
 import com.selfuse.cellmap.ui.components.AppTopBar
@@ -163,8 +164,6 @@ import org.maplibre.android.style.layers.PropertyFactory.textFont
 import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
 import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
 import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
-import org.maplibre.android.style.layers.PropertyFactory.textMaxWidth
-import org.maplibre.android.style.layers.PropertyFactory.textPadding
 import org.maplibre.android.style.layers.PropertyFactory.textSize
 import org.maplibre.android.style.layers.PropertyFactory.visibility
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -177,6 +176,7 @@ import kotlin.math.hypot
 private const val SOURCE_MARKERS = "cellmap-markers"
 private const val SOURCE_SECTORS = "cellmap-sectors"
 private const val SOURCE_SECTOR_LABELS = "cellmap-sector-labels"
+private const val SOURCE_SECTOR_LEADERS = "cellmap-sector-leaders"
 private const val SOURCE_TEMP = "cellmap-temp"
 private const val SOURCE_CLUSTERS = "cellmap-clusters"
 private const val SOURCE_DENSE = "cellmap-dense"
@@ -185,6 +185,7 @@ private const val LAYER_DENSE_TEXT = "cellmap-dense-text"
 private const val LAYER_MARKERS_PREFIX = "cellmap-marker-layer"
 private const val LAYER_SECTOR_LINE = "cellmap-sector-line"
 private const val LAYER_SECTOR_LABEL = "cellmap-sector-label"
+private const val LAYER_SECTOR_LEADER = "cellmap-sector-leader"
 private const val LAYER_TEMP = "cellmap-temp-layer"
 
 private const val LONG_PRESS_MILLIS = 1_500L
@@ -451,6 +452,7 @@ fun MapScreen(onBack: () -> Unit) {
             style.addSource(GeoJsonSource(SOURCE_MARKERS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_SECTORS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_SECTOR_LABELS, EMPTY_COLLECTION))
+            style.addSource(GeoJsonSource(SOURCE_SECTOR_LEADERS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_TEMP, EMPTY_COLLECTION))
             style.addLayer(
                 CircleLayer(LAYER_CLUSTERS, SOURCE_CLUSTERS).withProperties(
@@ -505,29 +507,36 @@ fun MapScreen(onBack: () -> Unit) {
                 )
             )
             style.addLayer(
-                SymbolLayer(LAYER_SECTOR_LABEL, SOURCE_SECTOR_LABELS)
-                    .withProperties(
-                        textField(get("name")),
-                        textSize(
-                            Expression.interpolate(
-                                Expression.linear(),
-                                Expression.zoom(),
-                                Expression.stop(8, 8f),
-                                Expression.stop(12, 9.5f),
-                                Expression.stop(16, 11.5f),
-                                Expression.stop(20, 14f)
-                            )
-                        ),
-                        textColor("#1B1B1B"),
-                        textHaloColor("#FFFFFF"),
-                        textHaloWidth(1.8f),
-                        textMaxWidth(7f),
-                        textPadding(2f),
-                        textAllowOverlap(true),
-                        textIgnorePlacement(true),
-                        textFont(arrayOf("Noto Sans Regular", "Open Sans Regular")),
-                        visibility("none")
-                    )
+                LineLayer(LAYER_SECTOR_LEADER, SOURCE_SECTOR_LEADERS).withProperties(
+                    lineColor("#546E7A"),
+                    lineOpacity(0.7f),
+                    lineWidth(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(10, 1f),
+                            Expression.stop(18, 1.6f)
+                        )
+                    ),
+                    visibility("none")
+                )
+            )
+            style.addLayer(
+                SymbolLayer(LAYER_SECTOR_LABEL, SOURCE_SECTOR_LABELS).withProperties(
+                    iconImage(get("icon")),
+                    iconSize(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(10, 0.9f),
+                            Expression.stop(16, 1f),
+                            Expression.stop(20, 1.08f)
+                        )
+                    ),
+                    iconAllowOverlap(true),
+                    iconIgnorePlacement(true),
+                    visibility("none")
+                )
             )
             style.addLayer(
                 CircleLayer(LAYER_DENSE, SOURCE_DENSE).withProperties(
@@ -613,13 +622,43 @@ fun MapScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(state.sectorJson, state.sectorLabelJson, loadedStyle) {
+    LaunchedEffect(state.sectorJson, state.sectorLabelJson, state.sectorLeaderJson, loadedStyle) {
         val style = loadedStyle ?: return@LaunchedEffect
         val shapes = state.sectorJson.ifBlank { EMPTY_COLLECTION }
         val labels = state.sectorLabelJson.ifBlank { EMPTY_COLLECTION }
+        val leaders = state.sectorLeaderJson.ifBlank { EMPTY_COLLECTION }
         runCatching {
             style.getSourceAs<GeoJsonSource>(SOURCE_SECTORS)?.setGeoJson(shapes)
             style.getSourceAs<GeoJsonSource>(SOURCE_SECTOR_LABELS)?.setGeoJson(labels)
+            style.getSourceAs<GeoJsonSource>(SOURCE_SECTOR_LEADERS)?.setGeoJson(leaders)
+        }
+    }
+
+    val sectorIconIds = remember { mutableSetOf<String>() }
+    DisposableEffect(loadedStyle) {
+        onDispose { sectorIconIds.clear() }
+    }
+    LaunchedEffect(state.sectorIcons, loadedStyle) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        val desired = state.sectorIcons
+        val missing = desired.filter { it.id !in sectorIconIds }
+        if (missing.isNotEmpty()) {
+            val bitmaps = withContext(Dispatchers.Default) {
+                missing.map { it to SectorLabelIcons.bitmap(context, it.text) }
+            }
+            bitmaps.forEach { (icon, bitmap) ->
+                runCatching { style.addImage(icon.id, bitmap) }
+                    .onSuccess { sectorIconIds.add(icon.id) }
+            }
+            runCatching {
+                style.getSourceAs<GeoJsonSource>(SOURCE_SECTOR_LABELS)
+                    ?.setGeoJson(state.sectorLabelJson.ifBlank { EMPTY_COLLECTION })
+            }
+        }
+        val desiredIds = desired.mapTo(HashSet()) { it.id }
+        (sectorIconIds - desiredIds).toList().forEach { id ->
+            runCatching { style.removeImage(id) }
+            sectorIconIds.remove(id)
         }
     }
 
@@ -631,6 +670,7 @@ fun MapScreen(onBack: () -> Unit) {
                 style.getLayer(sectorFillLayerId(markerStyle.key))?.setProperties(visibility(value))
             }
             style.getLayer(LAYER_SECTOR_LINE)?.setProperties(visibility(value))
+            style.getLayer(LAYER_SECTOR_LEADER)?.setProperties(visibility(value))
             style.getLayer(LAYER_SECTOR_LABEL)?.setProperties(visibility(value))
         }
     }
