@@ -47,6 +47,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -76,7 +77,7 @@ import com.selfuse.cellmap.core.model.NetworkSystem
 import com.selfuse.cellmap.core.util.Formats
 import com.selfuse.cellmap.data.db.StationEntity
 import com.selfuse.cellmap.diagnostics.CrashDiagnostics
-import com.selfuse.cellmap.map.GeoJsonBuilder
+import com.selfuse.cellmap.map.BaseMapProvider
 import com.selfuse.cellmap.map.MapLibreRuntime
 import com.selfuse.cellmap.map.MarkerIconCache
 import com.selfuse.cellmap.ui.components.AppTopBar
@@ -111,7 +112,10 @@ import org.maplibre.android.style.layers.PropertyFactory.textField
 import org.maplibre.android.style.layers.PropertyFactory.textFont
 import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.textSize
+import org.maplibre.android.style.layers.PropertyFactory.visibility
 import org.maplibre.android.style.sources.GeoJsonSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 private const val SOURCE_MARKERS = "cellmap-markers"
@@ -120,6 +124,7 @@ private const val LAYER_MARKERS = "cellmap-marker-layer"
 private const val LAYER_CLUSTERS = "cellmap-cluster-layer"
 private const val LAYER_CLUSTER_TEXT = "cellmap-cluster-text"
 private const val EMPTY_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}"
+private const val HIDE_MARKERS_THRESHOLD = 600
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,29 +136,34 @@ fun MapScreen(onBack: () -> Unit) {
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val initResult = remember(context) {
-        CrashDiagnostics.log(context, "MapScreen initializing MapLibre")
-        MapLibreRuntime.ensureInitialized(context)
-    }
-    if (initResult.isFailure) {
-        MapUnavailableScreen(initResult.exceptionOrNull(), onBack)
-        return
-    }
-    val mapViewResult = remember(context) {
+    var mapView by remember { mutableStateOf<MapView?>(null) }
+    var mapViewError by remember { mutableStateOf<Throwable?>(null) }
+    LaunchedEffect(context) {
+        val init = runCatching {
+            CrashDiagnostics.log(context, "MapScreen initializing MapLibre")
+            MapLibreRuntime.ensureInitialized(context)
+        }
+        val initFailure = init.exceptionOrNull()
+        if (initFailure != null) {
+            mapViewError = initFailure
+            return@LaunchedEffect
+        }
         runCatching {
             CrashDiagnostics.log(context, "MapScreen creating MapView")
             MapView(context).apply { onCreate(null) }
-        }.onFailure {
-            CrashDiagnostics.log(context, "MapView creation failed: $it")
-        }
+        }.onSuccess { mapView = it }
+            .onFailure {
+                CrashDiagnostics.log(context, "MapView creation failed: $it")
+                mapViewError = it
+            }
     }
-    val mapView = mapViewResult.getOrNull()
-    if (mapView == null) {
-        MapUnavailableScreen(mapViewResult.exceptionOrNull(), onBack)
+    if (mapViewError != null) {
+        MapUnavailableScreen(mapViewError, onBack)
         return
     }
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
+    var appliedStyleJson by remember { mutableStateOf<String?>(null) }
     var showFilters by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.message) {
@@ -163,35 +173,41 @@ fun MapScreen(onBack: () -> Unit) {
     }
 
     DisposableEffect(lifecycleOwner, mapView) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> mapView.onStart()
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                Lifecycle.Event.ON_STOP -> mapView.onStop()
-                else -> Unit
+        val view = mapView
+        if (view == null) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> view.onStart()
+                    Lifecycle.Event.ON_RESUME -> view.onResume()
+                    Lifecycle.Event.ON_PAUSE -> view.onPause()
+                    Lifecycle.Event.ON_STOP -> view.onStop()
+                    else -> Unit
+                }
             }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        val current = lifecycleOwner.lifecycle.currentState
-        if (current.isAtLeast(Lifecycle.State.RESUMED)) {
-            mapView.onStart()
-            mapView.onResume()
-        } else if (current.isAtLeast(Lifecycle.State.STARTED)) {
-            mapView.onStart()
-        }
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            runCatching {
-                mapView.onPause()
-                mapView.onStop()
-                mapView.onDestroy()
+            lifecycleOwner.lifecycle.addObserver(observer)
+            val current = lifecycleOwner.lifecycle.currentState
+            if (current.isAtLeast(Lifecycle.State.RESUMED)) {
+                view.onStart()
+                view.onResume()
+            } else if (current.isAtLeast(Lifecycle.State.STARTED)) {
+                view.onStart()
+            }
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                runCatching {
+                    view.onPause()
+                    view.onStop()
+                    view.onDestroy()
+                }
             }
         }
     }
 
     LaunchedEffect(mapView) {
-        mapView.getMapAsync { map ->
+        val view = mapView ?: return@LaunchedEffect
+        view.getMapAsync { map ->
             mapLibreMap = map
             map.uiSettings.isRotateGesturesEnabled = false
             map.uiSettings.isTiltGesturesEnabled = false
@@ -199,7 +215,13 @@ fun MapScreen(onBack: () -> Unit) {
                 .target(LatLng(state.centerLat, state.centerLon))
                 .zoom(state.zoom)
                 .build()
+            map.addOnCameraMoveStartedListener {
+                if (state.markers.size >= HIDE_MARKERS_THRESHOLD) {
+                    loadedStyle?.setCellMapLayersVisible(false)
+                }
+            }
             map.addOnCameraIdleListener {
+                loadedStyle?.setCellMapLayersVisible(true)
                 val camera = map.cameraPosition
                 val bounds = runCatching { map.projection.visibleRegion.latLngBounds }.getOrNull()
                     ?: return@addOnCameraIdleListener
@@ -248,7 +270,9 @@ fun MapScreen(onBack: () -> Unit) {
         val map = mapLibreMap ?: return@LaunchedEffect
         val json = state.styleJson
         if (json.isBlank()) return@LaunchedEffect
-        val icons = MarkerIconCache.icons(context)
+        if (json == appliedStyleJson) return@LaunchedEffect
+        appliedStyleJson = json
+        val icons = withContext(Dispatchers.Default) { MarkerIconCache.icons(context) }
         map.setStyle(Style.Builder().fromJson(json)) { style ->
             icons.forEach { (name, bitmap) -> style.addImage(name, bitmap) }
             style.addSource(GeoJsonSource(SOURCE_CLUSTERS, EMPTY_COLLECTION))
@@ -284,19 +308,30 @@ fun MapScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(state.markers, loadedStyle) {
+    LaunchedEffect(state.markersJson, loadedStyle) {
         val style = loadedStyle ?: return@LaunchedEffect
+        val json = state.markersJson
+        if (json.isBlank()) return@LaunchedEffect
         runCatching {
-            style.getSourceAs<GeoJsonSource>(SOURCE_MARKERS)
-                ?.setGeoJson(GeoJsonBuilder.markers(state.markers))
+            style.getSourceAs<GeoJsonSource>(SOURCE_MARKERS)?.setGeoJson(json)
         }
     }
 
-    LaunchedEffect(state.clusters, loadedStyle) {
+    LaunchedEffect(state.clustersJson, loadedStyle) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        val json = state.clustersJson
+        if (json.isBlank()) return@LaunchedEffect
+        runCatching {
+            style.getSourceAs<GeoJsonSource>(SOURCE_CLUSTERS)?.setGeoJson(json)
+        }
+    }
+
+    LaunchedEffect(state.annotationsVisible, loadedStyle) {
         val style = loadedStyle ?: return@LaunchedEffect
         runCatching {
-            style.getSourceAs<GeoJsonSource>(SOURCE_CLUSTERS)
-                ?.setGeoJson(GeoJsonBuilder.clusters(state.clusters))
+            style.getLayer(BaseMapProvider.LAYER_ANNOTATION)?.setProperties(
+                visibility(if (state.annotationsVisible) "visible" else "none")
+            )
         }
     }
 
@@ -335,7 +370,23 @@ fun MapScreen(onBack: () -> Unit) {
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+            val currentMapView = mapView
+            if (currentMapView != null) {
+                AndroidView(factory = { currentMapView }, modifier = Modifier.fillMaxSize())
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(10.dp))
+                        Text("地图加载中", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
 
             Column(
                 modifier = Modifier
@@ -441,6 +492,7 @@ fun MapScreen(onBack: () -> Unit) {
             onDistrict = vm::setDistrict,
             onBand = vm::setBand,
             onClear = vm::clearFilters,
+            onToggleAnnotations = vm::setAnnotationsVisible,
             onDismiss = { showFilters = false }
         )
     }
@@ -454,6 +506,15 @@ fun MapScreen(onBack: () -> Unit) {
                 onDismiss = vm::clearSelection
             )
         }
+    }
+}
+
+private fun Style.setCellMapLayersVisible(visible: Boolean) {
+    val value = if (visible) "visible" else "none"
+    runCatching {
+        getLayer(LAYER_CLUSTERS)?.setProperties(visibility(value))
+        getLayer(LAYER_CLUSTER_TEXT)?.setProperties(visibility(value))
+        getLayer(LAYER_MARKERS)?.setProperties(visibility(value))
     }
 }
 
@@ -601,6 +662,7 @@ private fun FilterSheet(
     onDistrict: (String) -> Unit,
     onBand: (String) -> Unit,
     onClear: () -> Unit,
+    onToggleAnnotations: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -648,6 +710,21 @@ private fun FilterSheet(
                 options = state.bands,
                 onSelect = onBand
             )
+            SectionHeader("底图注记")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("路网与 POI 注记", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "显示道路、商铺与楼栋名称，关闭可省流量与电量",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = state.annotationsVisible,
+                    onCheckedChange = onToggleAnnotations
+                )
+            }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onClear, modifier = Modifier.weight(1f)) {

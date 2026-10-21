@@ -24,8 +24,9 @@ class StationRepository(private val db: AppDatabase) {
         filters: MarkerFilters,
         optimizeReady: Boolean,
         zoom: Double,
-        limit: Int = 7_000
+        limit: Int = 0
     ): ViewportSnapshot = withContext(Dispatchers.IO) {
+        val effectiveLimit = if (limit > 0) limit else limitForZoom(zoom)
         val optimizedMarkers = if (optimizeReady) db.optimizationDao().markerCount() else 0
         val useOptimized = optimizeReady && optimizedMarkers > 0
         if (useOptimized && zoom <= PRE_CLUSTER_MAX_ZOOM) {
@@ -36,18 +37,18 @@ class StationRepository(private val db: AppDatabase) {
             )
         }
         return@withContext if (useOptimized) {
-            val entities = queryOptimized(bounds, system, filters, limit)
+            val entities = queryOptimized(bounds, system, filters, effectiveLimit)
             ViewportSnapshot(
                 markers = entities.mapNotNull { it.toMapMarker() },
                 usingOptimized = true,
-                truncated = entities.size >= limit
+                truncated = entities.size >= effectiveLimit
             )
         } else {
-            val entities = queryRaw(bounds, system, filters, limit)
+            val entities = queryRaw(bounds, system, filters, effectiveLimit)
             ViewportSnapshot(
                 markers = entities.mapNotNull { it.toMapMarker() },
                 usingOptimized = false,
-                truncated = entities.size >= limit
+                truncated = entities.size >= effectiveLimit
             )
         }
     }
@@ -241,5 +242,16 @@ class StationRepository(private val db: AppDatabase) {
 
     companion object {
         const val PRE_CLUSTER_MAX_ZOOM = 10
+
+        /**
+         * 低缩放级别点位高度重叠，降低上限可显著减少符号绘制开销；
+         * 放大后逐步提高，保证细节数据仍可查看。
+         */
+        fun limitForZoom(zoom: Double): Int = when {
+            zoom < 11.0 -> 1_200
+            zoom < 13.0 -> 2_500
+            zoom < 15.0 -> 4_000
+            else -> 6_000
+        }
     }
 }

@@ -40,6 +40,20 @@ class TiandituTiles(
         )
     }
 
+    /**
+     * 影像中文注记（道路、POI、楼栋名）。与影像共用 Key，作为独立 raster 图层叠加，
+     * 可在低缩放级别关闭以节省流量与电量。
+     */
+    fun annotationUrls(key: String): List<String> {
+        val encoded = URLEncoder.encode(key, "UTF-8")
+        return (0..7).map { sub ->
+            "https://t$sub.tianditu.gov.cn/cia_w/wmts" +
+                "?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0" +
+                "&LAYER=cia&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles" +
+                "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=$encoded"
+        }
+    }
+
     fun probeUrl(key: String): String {
         val encoded = URLEncoder.encode(key, "UTF-8")
         return "https://t0.tianditu.gov.cn/img_w/wmts" +

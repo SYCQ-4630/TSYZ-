@@ -28,17 +28,18 @@ class BaseMapProvider(
         val session = keyRepository.sessionKey()
         if (session == null) {
             return BasemapConfig(
-                styleJson = buildStyle(null, null),
+                styleJson = buildStyle(null, null, null),
                 sessionKey = null,
                 attribution = "天地图 Key 未就绪",
                 keyReady = false
             )
         }
         val urls = tiles.tileUrls(session.plain)
+        val annotations = runCatching { tiles.annotationUrls(session.plain) }.getOrNull()
         return BasemapConfig(
-            styleJson = buildStyle(urls.urls, urls.attribution),
+            styleJson = buildStyle(urls.urls, annotations, urls.attribution),
             sessionKey = session,
-            attribution = urls.attribution,
+            attribution = if (annotations != null) "${urls.attribution} · 含注记" else urls.attribution,
             keyReady = true
         )
     }
@@ -54,7 +55,11 @@ class BaseMapProvider(
         logger.log(com.selfuse.cellmap.data.db.LogModule.KEY, com.selfuse.cellmap.data.db.LogLevel.ERROR, "底图鉴权失败", reason)
     }
 
-    private fun buildStyle(tileUrls: List<String>?, attribution: String?): String {
+    private fun buildStyle(
+        tileUrls: List<String>?,
+        annotationUrls: List<String>?,
+        attribution: String?
+    ): String {
         val root = JSONObject()
             .put("version", 8)
             .put("name", "CellMap Tianditu")
@@ -69,6 +74,18 @@ class BaseMapProvider(
                     .put("tiles", JSONArray(tileUrls))
                     .put("tileSize", 256)
                     .put("minzoom", 1)
+                    .put("maxzoom", 18)
+                    .put("attribution", attribution ?: "")
+            )
+        }
+        if (annotationUrls != null) {
+            sources.put(
+                SOURCE_ANNOTATION,
+                JSONObject()
+                    .put("type", "raster")
+                    .put("tiles", JSONArray(annotationUrls))
+                    .put("tileSize", 256)
+                    .put("minzoom", ANNOTATION_MIN_ZOOM)
                     .put("maxzoom", 18)
                     .put("attribution", attribution ?: "")
             )
@@ -98,8 +115,30 @@ class BaseMapProvider(
                     )
             )
         }
+        if (annotationUrls != null) {
+            layers.put(
+                JSONObject()
+                    .put("id", LAYER_ANNOTATION)
+                    .put("type", "raster")
+                    .put("source", SOURCE_ANNOTATION)
+                    .put("minzoom", ANNOTATION_MIN_ZOOM)
+                    .put("maxzoom", 18)
+                    .put(
+                        "paint",
+                        JSONObject()
+                            .put("raster-opacity", 0.92)
+                            .put("raster-fade-duration", 120)
+                    )
+            )
+        }
 
         root.put("layers", layers)
         return root.toString()
+    }
+
+    companion object {
+        const val SOURCE_ANNOTATION = "tianditu-annotation"
+        const val LAYER_ANNOTATION = "tianditu-annotation"
+        const val ANNOTATION_MIN_ZOOM = 10
     }
 }
