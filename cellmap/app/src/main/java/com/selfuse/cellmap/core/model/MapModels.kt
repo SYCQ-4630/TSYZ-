@@ -23,6 +23,16 @@ data class MapCluster(
 )
 
 @Immutable
+data class DenseGroup(
+    val id: String,
+    val lat: Double,
+    val lon: Double,
+    val markers: List<MapMarker>
+) {
+    val count: Int get() = markers.size
+}
+
+@Immutable
 data class ViewportSnapshot(
     val markers: List<MapMarker> = emptyList(),
     val clusters: List<MapCluster> = emptyList(),

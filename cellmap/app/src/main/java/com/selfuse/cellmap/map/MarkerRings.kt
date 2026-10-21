@@ -12,12 +12,12 @@ object MarkerRings {
 
     const val COUNT = 12
     private const val GOLDEN_ANGLE = 2.399963229728653
-    private const val SPACING_PX = 10.5
+    const val SPACING_PX = 10.5f
 
-    fun offset(ring: Int): Array<Float> {
+    fun offset(ring: Int, spacingPx: Float = SPACING_PX): Array<Float> {
         if (ring <= 0) return arrayOf(0f, 0f)
         val angle = ring * GOLDEN_ANGLE
-        val radius = SPACING_PX * sqrt(ring.toDouble())
+        val radius = spacingPx * sqrt(ring.toDouble())
         return arrayOf((cos(angle) * radius).toFloat(), (sin(angle) * radius).toFloat())
     }
 }

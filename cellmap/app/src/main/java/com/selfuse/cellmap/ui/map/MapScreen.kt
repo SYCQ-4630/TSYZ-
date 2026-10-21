@@ -13,6 +13,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,10 +36,12 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.LayersClear
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TableChart
@@ -95,7 +99,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.selfuse.cellmap.CellMapApp
+import com.selfuse.cellmap.core.model.DenseGroup
 import com.selfuse.cellmap.core.model.MarkerStyle
+import com.selfuse.cellmap.core.model.MapMarker
 import com.selfuse.cellmap.core.model.NetworkSystem
 import com.selfuse.cellmap.core.util.Formats
 import com.selfuse.cellmap.data.db.StationEntity
@@ -104,6 +110,7 @@ import com.selfuse.cellmap.map.BaseMapProvider
 import com.selfuse.cellmap.map.MapLibreRuntime
 import com.selfuse.cellmap.map.MarkerIconCache
 import com.selfuse.cellmap.map.MarkerRings
+import com.selfuse.cellmap.map.MarkerScaling
 import com.selfuse.cellmap.map.TempMarkerIcons
 import com.selfuse.cellmap.map.TempMarkerOverlay
 import com.selfuse.cellmap.ui.components.AppTopBar
@@ -150,6 +157,8 @@ import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
 import org.maplibre.android.style.layers.PropertyFactory.textFont
+import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
+import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
 import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.textSize
 import org.maplibre.android.style.layers.PropertyFactory.visibility
@@ -164,6 +173,9 @@ private const val SOURCE_MARKERS = "cellmap-markers"
 private const val SOURCE_SECTORS = "cellmap-sectors"
 private const val SOURCE_TEMP = "cellmap-temp"
 private const val SOURCE_CLUSTERS = "cellmap-clusters"
+private const val SOURCE_DENSE = "cellmap-dense"
+private const val LAYER_DENSE = "cellmap-dense-layer"
+private const val LAYER_DENSE_TEXT = "cellmap-dense-text"
 private const val LAYER_MARKERS_PREFIX = "cellmap-marker-layer"
 private const val LAYER_SECTOR_LINE = "cellmap-sector-line"
 private const val LAYER_TEMP = "cellmap-temp-layer"
@@ -224,6 +236,7 @@ fun MapScreen(onBack: () -> Unit) {
     var showFilters by remember { mutableStateOf(false) }
     var showBatches by remember { mutableStateOf(false) }
     var tempDraft by remember { mutableStateOf<TempDraft?>(null) }
+    var denseGroup by remember { mutableStateOf<DenseGroup?>(null) }
 
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
@@ -282,6 +295,7 @@ fun MapScreen(onBack: () -> Unit) {
             map.addOnCameraIdleListener {
                 loadedStyle?.setCellMapLayersVisible(true)
                 val camera = map.cameraPosition
+                loadedStyle?.let { applyMarkerRingSpacing(it, camera.zoom) }
                 val bounds = runCatching { map.projection.visibleRegion.latLngBounds }.getOrNull()
                     ?: return@addOnCameraIdleListener
                 val target = camera.target ?: LatLng(state.centerLat, state.centerLon)
@@ -310,6 +324,17 @@ fun MapScreen(onBack: () -> Unit) {
                             lon = marker.lon,
                             content = marker.content
                         )
+                        return@addOnMapClickListener true
+                    }
+                }
+                val dense = runCatching {
+                    map.queryRenderedFeatures(point, LAYER_DENSE, LAYER_DENSE_TEXT)
+                }.getOrDefault(emptyList()).firstOrNull()
+                val denseId = dense?.getStringProperty("gid")
+                if (denseId != null) {
+                    val group = vm.state.value.denseGroups.firstOrNull { it.id == denseId }
+                    if (group != null) {
+                        denseGroup = group
                         return@addOnMapClickListener true
                     }
                 }
@@ -406,6 +431,7 @@ fun MapScreen(onBack: () -> Unit) {
         map.setStyle(Style.Builder().fromJson(json)) { style ->
             icons.forEach { (name, bitmap) -> style.addImage(name, bitmap) }
             style.addSource(GeoJsonSource(SOURCE_CLUSTERS, EMPTY_COLLECTION))
+            style.addSource(GeoJsonSource(SOURCE_DENSE, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_MARKERS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_SECTORS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_TEMP, EMPTY_COLLECTION))
@@ -413,7 +439,14 @@ fun MapScreen(onBack: () -> Unit) {
                 CircleLayer(LAYER_CLUSTERS, SOURCE_CLUSTERS).withProperties(
                     circleColor("#0D47A1"),
                     circleOpacity(0.85f),
-                    circleRadius(16f),
+                    circleRadius(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(6, 12f),
+                            Expression.stop(10, 22f)
+                        )
+                    ),
                     circleStrokeColor("#FFFFFF"),
                     circleStrokeWidth(2.5f)
                 )
@@ -421,7 +454,14 @@ fun MapScreen(onBack: () -> Unit) {
             style.addLayer(
                 SymbolLayer(LAYER_CLUSTER_TEXT, SOURCE_CLUSTERS).withProperties(
                     textField(get("point_count_abbreviated")),
-                    textSize(12f),
+                    textSize(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(6, 10f),
+                            Expression.stop(10, 14f)
+                        )
+                    ),
                     textColor("#FFFFFF"),
                     textAllowOverlap(true),
                     textIgnorePlacement(true),
@@ -447,13 +487,55 @@ fun MapScreen(onBack: () -> Unit) {
                     visibility("none")
                 )
             )
+            style.addLayer(
+                CircleLayer(LAYER_DENSE, SOURCE_DENSE).withProperties(
+                    circleColor("#0D47A1"),
+                    circleOpacity(0.38f),
+                    circleRadius(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(15, 24f),
+                            Expression.stop(20, 38f)
+                        )
+                    ),
+                    circleStrokeColor("#FFFFFF"),
+                    circleStrokeWidth(2.5f)
+                )
+            )
+            style.addLayer(
+                SymbolLayer(LAYER_DENSE_TEXT, SOURCE_DENSE).withProperties(
+                    textField(get("count_abbreviated")),
+                    textSize(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(15, 13f),
+                            Expression.stop(20, 17f)
+                        )
+                    ),
+                    textColor("#FFFFFF"),
+                    textHaloColor("#0D47A1"),
+                    textHaloWidth(1.5f),
+                    textAllowOverlap(true),
+                    textIgnorePlacement(true),
+                    textFont(arrayOf("Noto Sans Regular", "Open Sans Regular"))
+                )
+            )
             for (ring in 0 until MarkerRings.COUNT) {
                 style.addLayer(
                     SymbolLayer(markerLayerId(ring), SOURCE_MARKERS)
                         .withFilter(Expression.eq(Expression.get("ring"), ring))
                         .withProperties(
                             iconImage(get("icon")),
-                            iconSize(0.62f),
+                            iconSize(
+                                Expression.interpolate(
+                                    Expression.linear(),
+                                    Expression.zoom(),
+                                    Expression.stop(10, MarkerScaling.iconScale(10.0)),
+                                    Expression.stop(20, MarkerScaling.iconScale(20.0))
+                                )
+                            ),
                             iconOffset(MarkerRings.offset(ring)),
                             iconAllowOverlap(true),
                             iconIgnorePlacement(true)
@@ -463,11 +545,19 @@ fun MapScreen(onBack: () -> Unit) {
             style.addLayer(
                 SymbolLayer(LAYER_TEMP, SOURCE_TEMP).withProperties(
                     iconImage(get("icon")),
-                    iconSize(0.62f),
+                    iconSize(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(10, MarkerScaling.iconScale(10.0)),
+                            Expression.stop(20, MarkerScaling.iconScale(20.0))
+                        )
+                    ),
                     iconAllowOverlap(true),
                     iconIgnorePlacement(true)
                 )
             )
+            applyMarkerRingSpacing(style, map.cameraPosition.zoom)
             loadedStyle = style
         }
     }
@@ -520,6 +610,15 @@ fun MapScreen(onBack: () -> Unit) {
         if (json.isBlank()) return@LaunchedEffect
         runCatching {
             style.getSourceAs<GeoJsonSource>(SOURCE_CLUSTERS)?.setGeoJson(json)
+        }
+    }
+
+    LaunchedEffect(state.denseJson, loadedStyle) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        val json = state.denseJson
+        if (json.isBlank()) return@LaunchedEffect
+        runCatching {
+            style.getSourceAs<GeoJsonSource>(SOURCE_DENSE)?.setGeoJson(json)
         }
     }
 
@@ -605,6 +704,7 @@ fun MapScreen(onBack: () -> Unit) {
                     )
                 }
                 Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -634,7 +734,18 @@ fun MapScreen(onBack: () -> Unit) {
                         }
                     }
                     if (state.sectorVisible) {
-                        TextButton(onClick = vm::clearSectors) {
+                        OutlinedButton(
+                            onClick = vm::clearSectors,
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Icon(
+                                Icons.Filled.LayersClear,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
                             Text("清除扇区 ${state.sectorTotal}")
                         }
                     }
@@ -760,6 +871,18 @@ fun MapScreen(onBack: () -> Unit) {
         }
     }
 
+    val group = denseGroup
+    if (group != null) {
+        DenseGroupDialog(
+            group = group,
+            onDismiss = { denseGroup = null },
+            onPick = { marker ->
+                denseGroup = null
+                vm.selectStation(marker.id)
+            }
+        )
+    }
+
     val draft = tempDraft
     if (draft != null) {
         TempMarkerDialog(
@@ -785,7 +908,20 @@ private fun Style.setCellMapLayersVisible(visible: Boolean) {
     runCatching {
         getLayer(LAYER_CLUSTERS)?.setProperties(visibility(value))
         getLayer(LAYER_CLUSTER_TEXT)?.setProperties(visibility(value))
+        getLayer(LAYER_DENSE)?.setProperties(visibility(value))
+        getLayer(LAYER_DENSE_TEXT)?.setProperties(visibility(value))
         markerLayerIds.forEach { id -> getLayer(id)?.setProperties(visibility(value)) }
+    }
+}
+
+private fun applyMarkerRingSpacing(style: Style, zoom: Double) {
+    val spacing = MarkerScaling.ringSpacing(zoom)
+    runCatching {
+        for (ring in 0 until MarkerRings.COUNT) {
+            style.getLayer(markerLayerId(ring))?.setProperties(
+                iconOffset(MarkerRings.offset(ring, spacing))
+            )
+        }
     }
 }
 
@@ -1363,6 +1499,82 @@ private fun ScrollableStationInfo(station: StationEntity, modifier: Modifier = M
     }
 }
 
+
+@Composable
+private fun DenseGroupDialog(
+    group: DenseGroup,
+    onDismiss: () -> Unit,
+    onPick: (MapMarker) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("此处 ${group.count} 个小区")
+                Text(
+                    "同一坐标，点选一项查看详情",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 380.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(group.markers, key = { it.id }) { marker ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onPick(marker) }
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            Modifier
+                                .size(14.dp)
+                                .background(Color(marker.style.colorHex.toInt()), CircleShape)
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                marker.title.ifBlank {
+                                    marker.cellId.ifBlank { "未命名小区" }
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                listOf(marker.cellId, marker.system, marker.style.label)
+                                    .filter { it.isNotBlank() }
+                                    .joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            Icons.Filled.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+    )
+}
 
 private data class TempDraft(
     val id: Long?,

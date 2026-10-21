@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.selfuse.cellmap.CellMapApp
 import com.selfuse.cellmap.core.model.MapCluster
+import com.selfuse.cellmap.core.model.DenseGroup
 import com.selfuse.cellmap.core.model.MapMarker
 import com.selfuse.cellmap.core.model.MarkerFilters
 import com.selfuse.cellmap.core.model.MarkerStyle
@@ -21,6 +22,7 @@ import com.selfuse.cellmap.data.db.ImportBatchEntity
 import com.selfuse.cellmap.data.db.StationEntity
 import com.selfuse.cellmap.data.key.ProbeResult
 import com.selfuse.cellmap.data.key.SessionKey
+import com.selfuse.cellmap.map.DenseGroups
 import com.selfuse.cellmap.map.GeoJsonBuilder
 import com.selfuse.cellmap.map.SectorOverlay
 import com.selfuse.cellmap.map.TempMarkerOverlay
@@ -55,6 +57,8 @@ data class MapUiState(
     val clusters: List<MapCluster> = emptyList(),
     val markersJson: String = "",
     val clustersJson: String = "",
+    val denseGroups: List<DenseGroup> = emptyList(),
+    val denseJson: String = "",
     val usingOptimized: Boolean = false,
     val truncated: Boolean = false,
     val loading: Boolean = false,
@@ -164,7 +168,9 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 sectorCount = 0,
                 sectorTotal = 0,
                 selectedSectorActive = false,
-                sectorJson = ""
+                sectorJson = "",
+                denseGroups = emptyList(),
+                denseJson = ""
             )
         }
         sectorGroups.clear()
@@ -273,12 +279,33 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 _state.update { it.copy(loading = false, message = error.message ?: "加载视口失败") }
                 return@launch
             }
-            // GeoJSON 序列化放到后台线程，避免大结果集在主线程卡住地图手势。
-            val (markersJson, clustersJson) = withContext(Dispatchers.Default) {
-                GeoJsonBuilder.markers(snapshot.markers) to GeoJsonBuilder.clusters(snapshot.clusters)
+            // 分组与 GeoJSON 序列化都放到后台线程，避免大结果集在主线程卡住地图手势。
+            val (denseGroups, json) = withContext(Dispatchers.Default) {
+                val groups = if (cameraZoom >= DenseGroups.MIN_ZOOM) {
+                    DenseGroups.build(snapshot.markers)
+                } else {
+                    emptyList()
+                }
+                val groupedIds = if (groups.isEmpty()) {
+                    emptySet()
+                } else {
+                    groups.flatMapTo(HashSet()) { group -> group.markers.map { it.id } }
+                }
+                val visibleMarkers = if (groupedIds.isEmpty()) {
+                    snapshot.markers
+                } else {
+                    snapshot.markers.filterNot { it.id in groupedIds }
+                }
+                groups to Triple(
+                    GeoJsonBuilder.markers(visibleMarkers),
+                    GeoJsonBuilder.clusters(snapshot.clusters),
+                    GeoJsonBuilder.denseGroups(groups)
+                )
             }
+            val (markersJson, clustersJson, denseJson) = json
             _state.update { current ->
                 if (current.markersJson == markersJson && current.clustersJson == clustersJson &&
+                    current.denseJson == denseJson && current.denseGroups == denseGroups &&
                     current.usingOptimized == snapshot.usingOptimized &&
                     current.truncated == snapshot.truncated
                 ) {
@@ -289,6 +316,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                         clusters = snapshot.clusters,
                         markersJson = markersJson,
                         clustersJson = clustersJson,
+                        denseGroups = denseGroups,
+                        denseJson = denseJson,
                         usingOptimized = snapshot.usingOptimized,
                         truncated = snapshot.truncated,
                         loading = false
@@ -312,7 +341,9 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 sectorCount = 0,
                 sectorTotal = 0,
                 selectedSectorActive = false,
-                sectorJson = ""
+                sectorJson = "",
+                denseGroups = emptyList(),
+                denseJson = ""
             )
         }
         sectorGroups.clear()

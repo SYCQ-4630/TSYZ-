@@ -1,5 +1,6 @@
 package com.selfuse.cellmap.map
 
+import com.selfuse.cellmap.core.model.DenseGroup
 import com.selfuse.cellmap.core.model.MapCluster
 import com.selfuse.cellmap.core.model.MapMarker
 import org.json.JSONArray
@@ -26,6 +27,29 @@ object GeoJsonBuilder {
             val geometry = JSONObject()
                 .put("type", "Point")
                 .put("coordinates", JSONArray().put(marker.lon).put(marker.lat))
+            features.put(
+                JSONObject()
+                    .put("type", "Feature")
+                    .put("geometry", geometry)
+                    .put("properties", properties)
+            )
+        }
+        return JSONObject()
+            .put("type", "FeatureCollection")
+            .put("features", features)
+            .toString()
+    }
+
+    fun denseGroups(groups: List<DenseGroup>): String {
+        val features = JSONArray()
+        groups.forEach { group ->
+            val properties = JSONObject()
+                .put("gid", group.id)
+                .put("count", group.count)
+                .put("count_abbreviated", abbreviate(group.count))
+            val geometry = JSONObject()
+                .put("type", "Point")
+                .put("coordinates", JSONArray().put(group.lon).put(group.lat))
             features.put(
                 JSONObject()
                     .put("type", "Feature")
