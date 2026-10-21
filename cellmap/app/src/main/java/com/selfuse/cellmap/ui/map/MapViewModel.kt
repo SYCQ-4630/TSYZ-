@@ -282,7 +282,7 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
             // 分组与 GeoJSON 序列化都放到后台线程，避免大结果集在主线程卡住地图手势。
             val (denseGroups, json) = withContext(Dispatchers.Default) {
                 val groups = if (cameraZoom >= DenseGroups.MIN_ZOOM) {
-                    DenseGroups.build(snapshot.markers)
+                    DenseGroups.build(snapshot.markers, cameraZoom)
                 } else {
                     emptyList()
                 }

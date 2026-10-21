@@ -283,6 +283,7 @@ fun MapScreen(onBack: () -> Unit) {
             mapLibreMap = map
             map.uiSettings.isRotateGesturesEnabled = false
             map.uiSettings.isTiltGesturesEnabled = false
+            map.setMaxZoomPreference(20.0)
             map.cameraPosition = CameraPosition.Builder()
                 .target(LatLng(state.centerLat, state.centerLon))
                 .zoom(state.zoom)
@@ -443,8 +444,8 @@ fun MapScreen(onBack: () -> Unit) {
                         Expression.interpolate(
                             Expression.linear(),
                             Expression.zoom(),
-                            Expression.stop(6, 12f),
-                            Expression.stop(10, 22f)
+                            Expression.stop(6, 10f),
+                            Expression.stop(10, 26f)
                         )
                     ),
                     circleStrokeColor("#FFFFFF"),
@@ -458,8 +459,8 @@ fun MapScreen(onBack: () -> Unit) {
                         Expression.interpolate(
                             Expression.linear(),
                             Expression.zoom(),
-                            Expression.stop(6, 10f),
-                            Expression.stop(10, 14f)
+                            Expression.stop(6, 9f),
+                            Expression.stop(10, 15f)
                         )
                     ),
                     textColor("#FFFFFF"),
@@ -495,8 +496,8 @@ fun MapScreen(onBack: () -> Unit) {
                         Expression.interpolate(
                             Expression.linear(),
                             Expression.zoom(),
-                            Expression.stop(15, 24f),
-                            Expression.stop(20, 38f)
+                            Expression.stop(19, 34f),
+                            Expression.stop(20, 42f)
                         )
                     ),
                     circleStrokeColor("#FFFFFF"),
@@ -510,8 +511,8 @@ fun MapScreen(onBack: () -> Unit) {
                         Expression.interpolate(
                             Expression.linear(),
                             Expression.zoom(),
-                            Expression.stop(15, 13f),
-                            Expression.stop(20, 17f)
+                            Expression.stop(19, 15f),
+                            Expression.stop(20, 18f)
                         )
                     ),
                     textColor("#FFFFFF"),
@@ -1510,9 +1511,9 @@ private fun DenseGroupDialog(
         onDismissRequest = onDismiss,
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("此处 ${group.count} 个小区")
+                Text("此处 ${group.count} 个标注点")
                 Text(
-                    "同一坐标，点选一项查看详情",
+                    "位置相近，点选一项查看详情",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
