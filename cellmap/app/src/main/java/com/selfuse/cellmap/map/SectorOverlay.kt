@@ -9,10 +9,7 @@ object SectorOverlay {
 
     private const val PROP_STYLE = "style"
     private const val PROP_NAME = "name"
-    private const val PROP_KIND = "kind"
     private const val PROP_ID = "sid"
-    private const val KIND_POLYGON = "polygon"
-    private const val KIND_LABEL = "label"
 
     /** 名称标签放在扇区中轴线上，位于半径的 58% 处，兼顾可读性与点击命中。 */
     private const val LABEL_RADIUS_RATIO = 0.58
@@ -32,7 +29,7 @@ object SectorOverlay {
             features.put(
                 JSONObject()
                     .put("type", "Feature")
-                    .put("properties", properties.put(PROP_KIND, KIND_POLYGON))
+                    .put("properties", properties)
                     .put(
                         "geometry",
                         JSONObject()
@@ -40,26 +37,35 @@ object SectorOverlay {
                             .put("coordinates", JSONArray().put(ring))
                     )
             )
-            val (labelLat, labelLon) = SectorGeometry.destination(
+        }
+        return JSONObject()
+            .put("type", "FeatureCollection")
+            .put("features", features)
+            .toString()
+    }
+
+    /** 小区名称标签使用独立点数据源，避免与面数据混合导致部分渲染器不显示扇区。 */
+    fun labelGeoJson(cells: List<SectorCell>): String {
+        val features = JSONArray()
+        cells.take(SectorGeometry.MAX_CELLS).forEach { cell ->
+            val (lat, lon) = SectorGeometry.destination(
                 cell.lat,
                 cell.lon,
                 cell.azimuth,
                 cell.radiusMeters * LABEL_RADIUS_RATIO
             )
-            val labelProperties = JSONObject()
-                .put(PROP_STYLE, cell.styleKey)
+            val properties = JSONObject()
                 .put(PROP_NAME, cell.cellName)
                 .put(PROP_ID, cell.id.toString())
-                .put(PROP_KIND, KIND_LABEL)
             features.put(
                 JSONObject()
                     .put("type", "Feature")
-                    .put("properties", labelProperties)
+                    .put("properties", properties)
                     .put(
                         "geometry",
                         JSONObject()
                             .put("type", "Point")
-                            .put("coordinates", JSONArray().put(labelLon).put(labelLat))
+                            .put("coordinates", JSONArray().put(lon).put(lat))
                     )
             )
         }

@@ -44,8 +44,8 @@ sdk.dir=/path/to/Android/Sdk
 
 | 版本 | 包名 | 适配设备 | 下载 |
 | --- | --- | --- | --- |
-| 荣耀版 1.9.0 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.9.0.apk |
-| 鸿蒙版 1.9.0 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.9.0.apk |
+| 荣耀版 1.9.1 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.9.1.apk |
+| 鸿蒙版 1.9.1 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.9.1.apk |
 
 校验值同时放在对应分支的 `.sha256` 文件中。两版可同机共存，数据互不共享；换版本需要重新导入与标注。
 
@@ -55,7 +55,7 @@ sdk.dir=/path/to/Android/Sdk
 
 HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要在卓易通中运行：
 
-1. 将 `dist/huawei/cellmap-huawei-1.9.0.apk` 传到手机，在卓易通内选择「本地安装」并允许安装未知来源应用。
+1. 将 `dist/huawei/cellmap-huawei-1.9.1.apk` 传到手机，在卓易通内选择「本地安装」并允许安装未知来源应用。
 2. 首次启动授予通知权限；若容器内无法跳转电池优化设置，可忽略，导入时保持应用在前台。
 3. 地图黑屏或闪烁时，进入地图右上角筛选面板，打开「兼容渲染 → 纹理模式」，返回首页后重新进入地图。
 4. 文件选择器看不到 XLSX 时，先在华为文件管理把文件复制到 `Download` 或卓易通的共享文件夹，再重新选择。
@@ -107,7 +107,7 @@ HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要
 - 地图视野查询只取绘制所需的 9 个列（`StationMarkerRow` 投影），不随字段扩充搬运整行文本，避免大结果集时掉帧
 - 每张表的未映射列以 `extraJson` 逐行保存，整行文本去重后写入 `searchText` 供地图搜索；表头识别失败时不会再阻断导入
 - 标注点使用指数曲线随层级缩放；16 级以下环偏移归零以保证坐标准确，16 级以上按像素环展开；19 级及以上按屏幕距离合并为半透明圆点，点击弹窗选择具体小区
-- 方位角扇区与小区名称共用独立 GeoJSON 源，填充、描边与文字图层按 `kind` 区分，默认 `none` 可见性；按标识点经纬度缓存已展开的扇区，同坐标小区合并为一组，最多 20 组，几何与标签锚点在后台线程一次生成，字号使用缩放表达式，关闭详情不影响已展开内容
+- 方位角扇区与小区名称使用独立 GeoJSON 源，面数据只包含 Polygon、标签只包含 Point，默认 `none` 可见性；按标识点经纬度缓存已展开的扇区，同坐标小区合并为一组，最多 20 组，几何与标签锚点在后台线程一次生成，字号使用缩放表达式，关闭详情不影响已展开内容
 - 扇区名称标签由地图渲染，开启重叠与忽略避让以避免漏显，点击查询标签图层并复用基站详情面板，不额外持有选中状态
 - 临时标识使用独立 GeoJSON 源与星形图标，图标按颜色缓存；颜色由黄金角确定性生成，长按计时器只观察触摸事件，不拦截地图手势
 - 密集点位按屏幕像素距离分组，分组与 GeoJSON 序列化在后台线程完成；合并后不再绘制被折叠的小图标，圆点半径、文字与标记尺寸使用缩放表达式，避免手势期间反复更新图层

@@ -176,6 +176,7 @@ import kotlin.math.hypot
 
 private const val SOURCE_MARKERS = "cellmap-markers"
 private const val SOURCE_SECTORS = "cellmap-sectors"
+private const val SOURCE_SECTOR_LABELS = "cellmap-sector-labels"
 private const val SOURCE_TEMP = "cellmap-temp"
 private const val SOURCE_CLUSTERS = "cellmap-clusters"
 private const val SOURCE_DENSE = "cellmap-dense"
@@ -449,6 +450,7 @@ fun MapScreen(onBack: () -> Unit) {
             style.addSource(GeoJsonSource(SOURCE_DENSE, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_MARKERS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_SECTORS, EMPTY_COLLECTION))
+            style.addSource(GeoJsonSource(SOURCE_SECTOR_LABELS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_TEMP, EMPTY_COLLECTION))
             style.addLayer(
                 CircleLayer(LAYER_CLUSTERS, SOURCE_CLUSTERS).withProperties(
@@ -486,12 +488,7 @@ fun MapScreen(onBack: () -> Unit) {
             MarkerStyle.entries.forEach { markerStyle ->
                 style.addLayer(
                     FillLayer(sectorFillLayerId(markerStyle.key), SOURCE_SECTORS)
-                        .withFilter(
-                            Expression.all(
-                                Expression.eq(Expression.get("style"), markerStyle.key),
-                                Expression.eq(Expression.get("kind"), "polygon")
-                            )
-                        )
+                        .withFilter(Expression.eq(Expression.get("style"), markerStyle.key))
                         .withProperties(
                             fillColor(markerStyle.colorHex.toInt()),
                             fillOpacity(0.28f),
@@ -500,18 +497,15 @@ fun MapScreen(onBack: () -> Unit) {
                 )
             }
             style.addLayer(
-                LineLayer(LAYER_SECTOR_LINE, SOURCE_SECTORS)
-                    .withFilter(Expression.eq(Expression.get("kind"), "polygon"))
-                    .withProperties(
-                        lineColor("#FFFFFF"),
-                        lineWidth(1.2f),
-                        lineOpacity(0.85f),
-                        visibility("none")
-                    )
+                LineLayer(LAYER_SECTOR_LINE, SOURCE_SECTORS).withProperties(
+                    lineColor("#FFFFFF"),
+                    lineWidth(1.2f),
+                    lineOpacity(0.85f),
+                    visibility("none")
+                )
             )
             style.addLayer(
-                SymbolLayer(LAYER_SECTOR_LABEL, SOURCE_SECTORS)
-                    .withFilter(Expression.eq(Expression.get("kind"), "label"))
+                SymbolLayer(LAYER_SECTOR_LABEL, SOURCE_SECTOR_LABELS)
                     .withProperties(
                         textField(get("name")),
                         textSize(
@@ -619,11 +613,13 @@ fun MapScreen(onBack: () -> Unit) {
         }
     }
 
-    LaunchedEffect(state.sectorJson, loadedStyle) {
+    LaunchedEffect(state.sectorJson, state.sectorLabelJson, loadedStyle) {
         val style = loadedStyle ?: return@LaunchedEffect
-        val json = state.sectorJson.ifBlank { EMPTY_COLLECTION }
+        val shapes = state.sectorJson.ifBlank { EMPTY_COLLECTION }
+        val labels = state.sectorLabelJson.ifBlank { EMPTY_COLLECTION }
         runCatching {
-            style.getSourceAs<GeoJsonSource>(SOURCE_SECTORS)?.setGeoJson(json)
+            style.getSourceAs<GeoJsonSource>(SOURCE_SECTORS)?.setGeoJson(shapes)
+            style.getSourceAs<GeoJsonSource>(SOURCE_SECTOR_LABELS)?.setGeoJson(labels)
         }
     }
 

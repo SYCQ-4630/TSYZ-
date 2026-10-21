@@ -88,6 +88,7 @@ data class MapUiState(
     val sectorTotal: Int = 0,
     val selectedSectorActive: Boolean = false,
     val sectorJson: String = "",
+    val sectorLabelJson: String = "",
     val tempMarkers: List<TempMarker> = emptyList(),
     val tempJson: String = ""
 ) {
@@ -169,6 +170,7 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 sectorTotal = 0,
                 selectedSectorActive = false,
                 sectorJson = "",
+                sectorLabelJson = "",
                 denseGroups = emptyList(),
                 denseJson = ""
             )
@@ -342,6 +344,7 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 sectorTotal = 0,
                 selectedSectorActive = false,
                 sectorJson = "",
+                sectorLabelJson = "",
                 denseGroups = emptyList(),
                 denseJson = ""
             )
@@ -538,7 +541,10 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     }
 
     fun clearSectors() {
-        if (sectorGroups.isEmpty() && _state.value.sectorJson.isBlank()) return
+        if (sectorGroups.isEmpty() &&
+            _state.value.sectorJson.isBlank() &&
+            _state.value.sectorLabelJson.isBlank()
+        ) return
         selectionSeq += 1
         sectorGroups.clear()
         sectorGeneration += 1
@@ -549,7 +555,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 sectorCount = 0,
                 sectorTotal = 0,
                 selectedSectorActive = false,
-                sectorJson = ""
+                sectorJson = "",
+                sectorLabelJson = ""
             )
         }
     }
@@ -558,14 +565,19 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     private suspend fun rebuildSectors(): Boolean {
         val generation = ++sectorGeneration
         val cells = sectorGroups.values.flatMap { it.cells }
-        val json = if (cells.isEmpty()) "" else withContext(Dispatchers.Default) {
-            runCatching { SectorOverlay.geoJson(cells) }.getOrDefault("")
+        val (json, labelJson) = if (cells.isEmpty()) {
+            "" to ""
+        } else withContext(Dispatchers.Default) {
+            val shapes = runCatching { SectorOverlay.geoJson(cells) }.getOrDefault("")
+            val labels = runCatching { SectorOverlay.labelGeoJson(cells) }.getOrDefault("")
+            shapes to labels
         }
         if (generation != sectorGeneration) return _state.value.sectorVisible
         val visible = json.isNotBlank()
         _state.update {
             it.copy(
                 sectorJson = json,
+                sectorLabelJson = labelJson,
                 sectorVisible = visible,
                 sectorTotal = if (visible) cells.size else 0
             )
