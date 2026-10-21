@@ -44,8 +44,8 @@ sdk.dir=/path/to/Android/Sdk
 
 | 版本 | 包名 | 适配设备 | 下载 |
 | --- | --- | --- | --- |
-| 荣耀版 1.2.0 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.2.0.apk |
-| 鸿蒙版 1.2.0 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.2.0.apk |
+| 荣耀版 1.2.1 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.2.1.apk |
+| 鸿蒙版 1.2.1 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.2.1.apk |
 
 校验值同时放在对应分支的 `.sha256` 文件中。两版可同机共存，数据互不共享；换版本需要重新导入与标注。
 
@@ -55,7 +55,7 @@ sdk.dir=/path/to/Android/Sdk
 
 HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要在卓易通中运行：
 
-1. 将 `dist/huawei/cellmap-huawei-1.2.0.apk` 传到手机，在卓易通内选择「本地安装」并允许安装未知来源应用。
+1. 将 `dist/huawei/cellmap-huawei-1.2.1.apk` 传到手机，在卓易通内选择「本地安装」并允许安装未知来源应用。
 2. 首次启动授予通知权限；若容器内无法跳转电池优化设置，可忽略，导入时保持应用在前台。
 3. 地图黑屏或闪烁时，进入地图右上角筛选面板，打开「兼容渲染 → 纹理模式」，返回首页后重新进入地图。
 4. 文件选择器看不到 XLSX 时，先在华为文件管理把文件复制到 `Download` 或卓易通的共享文件夹，再重新选择。
@@ -68,7 +68,7 @@ HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要
 1. **导入数据**：选择 `.xlsx` 文件，确认表头行与字段映射后开始导入。导入在 WorkManager 前台任务中执行，可暂停、取消与重试。
 2. **分类标注**：对未分类记录逐条或批量指定四色分类，完成后确认标注结果。
 3. **压缩优化**：生成按缩放级别聚类的 GeoJSONL 数据集与索引，原始数据保持不变，可回退。
-4. **地图查询**：按搜索或管理区县定位，叠加筛选条件，查看聚合点与基站详情，支持搜索基站 ID、小区 ID 与名称；每条结果右侧的展开按钮可查看完整基站信息，结果与详情文本都可长按选词复制。
+4. **地图查询**：按搜索或管理区县定位，叠加筛选条件，查看聚合点与基站详情，支持搜索基站 ID、小区 ID 与名称；每条结果右侧的展开按钮可查看完整基站信息，结果与详情文本都可长按选词复制。详情面板信息区独立滚动并带滚动条，「关闭 / 居中到该点」固定在面板底部。
 
 首页会列出未完成的准备项；缺少 Key、数据或标注时，可直接跳转到对应页面。
 

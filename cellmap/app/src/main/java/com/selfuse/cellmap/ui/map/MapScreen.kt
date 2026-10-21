@@ -3,14 +3,17 @@ package com.selfuse.cellmap.ui.map
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.PointF
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,8 +69,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -916,8 +923,9 @@ private fun StationDetail(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight(0.88f)
             .padding(horizontal = 20.dp)
-            .padding(bottom = 28.dp),
+            .padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -932,11 +940,12 @@ private fun StationDetail(
             }
         }
         Spacer(Modifier.height(6.dp))
-        SelectionContainer {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                StationInfoRows(station)
-            }
-        }
+        ScrollableStationInfo(
+            station = station,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        )
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
@@ -946,6 +955,47 @@ private fun StationDetail(
                 Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("居中到该点")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScrollableStationInfo(station: StationEntity, modifier: Modifier = Modifier) {
+    val scrollState = rememberScrollState()
+    val thumbColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+    val thumbMinHeight = with(LocalDensity.current) { 32.dp.toPx() }
+    BoxWithConstraints(modifier) {
+        val viewportHeight = constraints.maxHeight.toFloat()
+        SelectionContainer {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(end = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                StationInfoRows(station)
+            }
+        }
+        if (scrollState.maxValue > 0 && viewportHeight > 0f) {
+            val contentHeight = viewportHeight + scrollState.maxValue
+            Canvas(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(4.dp)
+                    .fillMaxHeight()
+            ) {
+                val thumbHeight = (size.height * size.height / contentHeight)
+                    .coerceAtLeast(thumbMinHeight.coerceAtMost(size.height))
+                val offset = (size.height - thumbHeight) *
+                    (scrollState.value.toFloat() / scrollState.maxValue)
+                drawRoundRect(
+                    color = thumbColor,
+                    topLeft = Offset(0f, offset),
+                    size = Size(size.width, thumbHeight),
+                    cornerRadius = CornerRadius(size.width / 2f, size.width / 2f)
+                )
             }
         }
     }
