@@ -508,6 +508,7 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 val azimuth = SectorGeometry.parseAzimuth(entity.azimuth) ?: return@mapNotNull null
                 val style = MarkerStyle.fromKey(entity.markerStyle) ?: return@mapNotNull null
                 SectorCell(
+                    id = entity.id,
                     lat = entity.lat,
                     lon = entity.lon,
                     azimuth = azimuth,

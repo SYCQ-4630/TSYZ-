@@ -163,6 +163,8 @@ import org.maplibre.android.style.layers.PropertyFactory.textFont
 import org.maplibre.android.style.layers.PropertyFactory.textHaloColor
 import org.maplibre.android.style.layers.PropertyFactory.textHaloWidth
 import org.maplibre.android.style.layers.PropertyFactory.textIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.textMaxWidth
+import org.maplibre.android.style.layers.PropertyFactory.textPadding
 import org.maplibre.android.style.layers.PropertyFactory.textSize
 import org.maplibre.android.style.layers.PropertyFactory.visibility
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -181,6 +183,7 @@ private const val LAYER_DENSE = "cellmap-dense-layer"
 private const val LAYER_DENSE_TEXT = "cellmap-dense-text"
 private const val LAYER_MARKERS_PREFIX = "cellmap-marker-layer"
 private const val LAYER_SECTOR_LINE = "cellmap-sector-line"
+private const val LAYER_SECTOR_LABEL = "cellmap-sector-label"
 private const val LAYER_TEMP = "cellmap-temp-layer"
 
 private const val LONG_PRESS_MILLIS = 1_500L
@@ -342,6 +345,14 @@ fun MapScreen(onBack: () -> Unit) {
                         return@addOnMapClickListener true
                     }
                 }
+                val sectorLabel = runCatching {
+                    map.queryRenderedFeatures(point, LAYER_SECTOR_LABEL)
+                }.getOrDefault(emptyList()).firstOrNull()
+                val sectorStationId = sectorLabel?.getStringProperty("sid")?.toLongOrNull()
+                if (sectorStationId != null) {
+                    vm.selectStation(sectorStationId)
+                    return@addOnMapClickListener true
+                }
                 val clusters = runCatching {
                     map.queryRenderedFeatures(point, LAYER_CLUSTERS, LAYER_CLUSTER_TEXT)
                 }.getOrDefault(emptyList())
@@ -475,7 +486,12 @@ fun MapScreen(onBack: () -> Unit) {
             MarkerStyle.entries.forEach { markerStyle ->
                 style.addLayer(
                     FillLayer(sectorFillLayerId(markerStyle.key), SOURCE_SECTORS)
-                        .withFilter(Expression.eq(Expression.get("style"), markerStyle.key))
+                        .withFilter(
+                            Expression.all(
+                                Expression.eq(Expression.get("style"), markerStyle.key),
+                                Expression.eq(Expression.get("kind"), "polygon")
+                            )
+                        )
                         .withProperties(
                             fillColor(markerStyle.colorHex.toInt()),
                             fillOpacity(0.28f),
@@ -484,12 +500,40 @@ fun MapScreen(onBack: () -> Unit) {
                 )
             }
             style.addLayer(
-                LineLayer(LAYER_SECTOR_LINE, SOURCE_SECTORS).withProperties(
-                    lineColor("#FFFFFF"),
-                    lineWidth(1.2f),
-                    lineOpacity(0.85f),
-                    visibility("none")
-                )
+                LineLayer(LAYER_SECTOR_LINE, SOURCE_SECTORS)
+                    .withFilter(Expression.eq(Expression.get("kind"), "polygon"))
+                    .withProperties(
+                        lineColor("#FFFFFF"),
+                        lineWidth(1.2f),
+                        lineOpacity(0.85f),
+                        visibility("none")
+                    )
+            )
+            style.addLayer(
+                SymbolLayer(LAYER_SECTOR_LABEL, SOURCE_SECTORS)
+                    .withFilter(Expression.eq(Expression.get("kind"), "label"))
+                    .withProperties(
+                        textField(get("name")),
+                        textSize(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(8, 8f),
+                                Expression.stop(12, 9.5f),
+                                Expression.stop(16, 11.5f),
+                                Expression.stop(20, 14f)
+                            )
+                        ),
+                        textColor("#1B1B1B"),
+                        textHaloColor("#FFFFFF"),
+                        textHaloWidth(1.8f),
+                        textMaxWidth(7f),
+                        textPadding(2f),
+                        textAllowOverlap(true),
+                        textIgnorePlacement(true),
+                        textFont(arrayOf("Noto Sans Regular", "Open Sans Regular")),
+                        visibility("none")
+                    )
             )
             style.addLayer(
                 CircleLayer(LAYER_DENSE, SOURCE_DENSE).withProperties(
@@ -591,6 +635,7 @@ fun MapScreen(onBack: () -> Unit) {
                 style.getLayer(sectorFillLayerId(markerStyle.key))?.setProperties(visibility(value))
             }
             style.getLayer(LAYER_SECTOR_LINE)?.setProperties(visibility(value))
+            style.getLayer(LAYER_SECTOR_LABEL)?.setProperties(visibility(value))
         }
     }
 

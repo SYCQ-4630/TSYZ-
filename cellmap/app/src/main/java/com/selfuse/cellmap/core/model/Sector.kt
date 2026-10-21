@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 
 @Immutable
 data class SectorCell(
+    val id: Long,
     val lat: Double,
     val lon: Double,
     val azimuth: Double,
