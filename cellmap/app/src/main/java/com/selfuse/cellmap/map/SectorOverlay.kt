@@ -10,11 +10,11 @@ object SectorOverlay {
     private const val PROP_STYLE = "style"
     private const val PROP_NAME = "name"
 
-    fun geoJson(cells: List<SectorCell>, radiusMeters: Double): String {
+    fun geoJson(cells: List<SectorCell>): String {
         val features = JSONArray()
         cells.take(SectorGeometry.MAX_CELLS).forEach { cell ->
             val ring = JSONArray()
-            SectorGeometry.wedge(cell.lat, cell.lon, cell.azimuth, radiusMeters).forEach { (lat, lon) ->
+            SectorGeometry.wedge(cell.lat, cell.lon, cell.azimuth, cell.radiusMeters).forEach { (lat, lon) ->
                 ring.put(JSONArray().put(lon).put(lat))
             }
             val properties = JSONObject()

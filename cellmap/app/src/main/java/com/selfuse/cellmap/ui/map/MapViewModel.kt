@@ -15,6 +15,7 @@ import com.selfuse.cellmap.core.model.ReadinessState
 import com.selfuse.cellmap.core.model.SearchHit
 import com.selfuse.cellmap.core.model.SectorCell
 import com.selfuse.cellmap.core.model.SectorGeometry
+import com.selfuse.cellmap.core.model.TempMarker
 import com.selfuse.cellmap.core.util.GeoBounds
 import com.selfuse.cellmap.data.db.ImportBatchEntity
 import com.selfuse.cellmap.data.db.StationEntity
@@ -22,6 +23,8 @@ import com.selfuse.cellmap.data.key.ProbeResult
 import com.selfuse.cellmap.data.key.SessionKey
 import com.selfuse.cellmap.map.GeoJsonBuilder
 import com.selfuse.cellmap.map.SectorOverlay
+import com.selfuse.cellmap.map.TempMarkerOverlay
+import com.selfuse.cellmap.data.repo.TemporaryMarkerStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -78,7 +81,11 @@ data class MapUiState(
     val sectorVisible: Boolean = false,
     val sectorBusy: Boolean = false,
     val sectorCount: Int = 0,
-    val sectorJson: String = ""
+    val sectorTotal: Int = 0,
+    val selectedSectorActive: Boolean = false,
+    val sectorJson: String = "",
+    val tempMarkers: List<TempMarker> = emptyList(),
+    val tempJson: String = ""
 ) {
     val canRender: Boolean get() = readiness.dataReady && readiness.labelReady
 }
@@ -98,6 +105,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     private var lastUsageAt = 0L
     private var cameraZoom = _state.value.zoom
     private var selectionSeq = 0L
+    private val sectorGroups = LinkedHashMap<String, SectorGroup>()
+    private var sectorGeneration = 0L
 
     init {
         viewModelScope.launch {
@@ -128,6 +137,14 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 }
             }
         }
+        viewModelScope.launch {
+            c.temporaryMarkers.markers.collect { markers ->
+                val json = withContext(Dispatchers.Default) {
+                    TempMarkerOverlay.geoJson(markers)
+                }
+                _state.update { it.copy(tempMarkers = markers, tempJson = json) }
+            }
+        }
         refreshBasemap()
         loadFilterOptions()
     }
@@ -143,10 +160,15 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 expandedSearchId = null,
                 expandedStation = null,
                 sectorVisible = false,
+                sectorBusy = false,
                 sectorCount = 0,
+                sectorTotal = 0,
+                selectedSectorActive = false,
                 sectorJson = ""
             )
         }
+        sectorGroups.clear()
+        sectorGeneration += 1
         reloadViewport()
         runSearch()
     }
@@ -286,10 +308,15 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 expandedSearchId = null,
                 expandedStation = null,
                 sectorVisible = false,
+                sectorBusy = false,
                 sectorCount = 0,
+                sectorTotal = 0,
+                selectedSectorActive = false,
                 sectorJson = ""
             )
         }
+        sectorGroups.clear()
+        sectorGeneration += 1
         reloadViewport()
         runSearch()
     }
@@ -409,10 +436,10 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
             _state.update {
                 it.copy(
                     selected = station,
-                    sectorVisible = false,
                     sectorBusy = false,
                     sectorCount = sectors,
-                    sectorJson = ""
+                    selectedSectorActive = station != null &&
+                        sectorGroups.containsKey(sectorKey(station))
                 )
             }
         }
@@ -425,8 +452,17 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     fun toggleSectors() {
         val station = _state.value.selected ?: return
         if (_state.value.sectorBusy) return
-        if (_state.value.sectorVisible) {
-            _state.update { it.copy(sectorVisible = false) }
+        val key = sectorKey(station)
+        if (sectorGroups.containsKey(key)) {
+            sectorGroups.remove(key)
+            viewModelScope.launch {
+                rebuildSectors()
+                _state.update { it.copy(selectedSectorActive = false, sectorBusy = false) }
+            }
+            return
+        }
+        if (sectorGroups.size >= MAX_SECTOR_GROUPS) {
+            _state.update { it.copy(message = "最多同时展开 $MAX_SECTOR_GROUPS 个基站扇区") }
             return
         }
         val seq = selectionSeq
@@ -435,6 +471,7 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
             val entities = runCatching { c.stationRepository.sectorCells(station) }
                 .getOrDefault(emptyList())
             if (seq != selectionSeq) return@launch
+            val radius = sectorRadiusMeters(station.lat)
             val sectors = entities.mapNotNull { entity ->
                 val azimuth = SectorGeometry.parseAzimuth(entity.azimuth) ?: return@mapNotNull null
                 val style = MarkerStyle.fromKey(entity.markerStyle) ?: return@mapNotNull null
@@ -444,7 +481,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                     azimuth = azimuth,
                     styleKey = style.key,
                     cellName = entity.cellName ?: entity.cellId,
-                    system = entity.system
+                    system = entity.system,
+                    radiusMeters = radius
                 )
             }.distinctBy { (it.azimuth * 10).toInt() }
                 .take(SectorGeometry.MAX_CELLS)
@@ -454,24 +492,62 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 }
                 return@launch
             }
-            val radius = sectorRadiusMeters(station.lat)
-            val json = runCatching {
-                withContext(Dispatchers.Default) { SectorOverlay.geoJson(sectors, radius) }
-            }.getOrNull()
-            if (json == null) {
-                _state.update { it.copy(sectorBusy = false, message = "扇区生成失败") }
-                return@launch
-            }
+            sectorGroups[key] = SectorGroup(sectors)
+            val ok = rebuildSectors()
+            val stillActive = ok && sectorGroups.containsKey(key)
             _state.update {
                 it.copy(
                     sectorBusy = false,
-                    sectorVisible = true,
-                    sectorCount = sectors.size,
-                    sectorJson = json
+                    sectorCount = if (stillActive) sectors.size else 0,
+                    selectedSectorActive = stillActive
                 )
             }
         }
     }
+
+    fun clearSectors() {
+        if (sectorGroups.isEmpty() && _state.value.sectorJson.isBlank()) return
+        selectionSeq += 1
+        sectorGroups.clear()
+        sectorGeneration += 1
+        _state.update {
+            it.copy(
+                sectorVisible = false,
+                sectorBusy = false,
+                sectorCount = 0,
+                sectorTotal = 0,
+                selectedSectorActive = false,
+                sectorJson = ""
+            )
+        }
+    }
+
+    /** 重建全部扇区，返回是否仍有可见扇区。 */
+    private suspend fun rebuildSectors(): Boolean {
+        val generation = ++sectorGeneration
+        val cells = sectorGroups.values.flatMap { it.cells }
+        val json = if (cells.isEmpty()) "" else withContext(Dispatchers.Default) {
+            runCatching { SectorOverlay.geoJson(cells) }.getOrDefault("")
+        }
+        if (generation != sectorGeneration) return _state.value.sectorVisible
+        val visible = json.isNotBlank()
+        _state.update {
+            it.copy(
+                sectorJson = json,
+                sectorVisible = visible,
+                sectorTotal = if (visible) cells.size else 0
+            )
+        }
+        return visible
+    }
+
+    private fun sectorKey(station: StationEntity): String {
+        val lat = (station.lat * 1_000_000).toLong()
+        val lon = (station.lon * 1_000_000).toLong()
+        return "${station.stationId}|${station.system}|$lat|$lon"
+    }
+
+    private data class SectorGroup(val cells: List<SectorCell>)
 
     private fun sectorRadiusMeters(lat: Double): Double {
         val zoom = cameraZoom.coerceIn(3.0, 20.0)
@@ -489,12 +565,27 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
         _state.update {
             it.copy(
                 selected = null,
-                sectorVisible = false,
                 sectorBusy = false,
                 sectorCount = 0,
-                sectorJson = ""
+                selectedSectorActive = false
             )
         }
+    }
+
+    fun addTempMarker(lat: Double, lon: Double, content: String) {
+        if (!c.temporaryMarkers.add(lat, lon, content)) {
+            _state.update {
+                it.copy(message = "最多添加 ${TemporaryMarkerStore.MAX_MARKERS} 个临时标识")
+            }
+        }
+    }
+
+    fun updateTempMarker(id: Long, content: String) {
+        c.temporaryMarkers.update(id, content)
+    }
+
+    fun removeTempMarker(id: Long) {
+        c.temporaryMarkers.remove(id)
     }
 
     fun setAnnotationsVisible(visible: Boolean) {
@@ -524,6 +615,8 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     }
 
     companion object {
+        const val MAX_SECTOR_GROUPS = 20
+
         fun factory(app: CellMapApp) = viewModelFactory {
             initializer { MapViewModel(app) }
         }

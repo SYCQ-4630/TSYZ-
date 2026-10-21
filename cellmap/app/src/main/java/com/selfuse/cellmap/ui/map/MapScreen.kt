@@ -3,6 +3,12 @@ package com.selfuse.cellmap.ui.map
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.PointF
+import android.os.Handler
+import android.os.Looper
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +42,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.RadioButton
@@ -97,6 +104,8 @@ import com.selfuse.cellmap.map.BaseMapProvider
 import com.selfuse.cellmap.map.MapLibreRuntime
 import com.selfuse.cellmap.map.MarkerIconCache
 import com.selfuse.cellmap.map.MarkerRings
+import com.selfuse.cellmap.map.TempMarkerIcons
+import com.selfuse.cellmap.map.TempMarkerOverlay
 import com.selfuse.cellmap.ui.components.AppTopBar
 import com.selfuse.cellmap.ui.components.DividerSpacer
 import com.selfuse.cellmap.ui.components.KeyValueRow
@@ -149,12 +158,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import kotlin.math.hypot
 
 private const val SOURCE_MARKERS = "cellmap-markers"
 private const val SOURCE_SECTORS = "cellmap-sectors"
+private const val SOURCE_TEMP = "cellmap-temp"
 private const val SOURCE_CLUSTERS = "cellmap-clusters"
 private const val LAYER_MARKERS_PREFIX = "cellmap-marker-layer"
 private const val LAYER_SECTOR_LINE = "cellmap-sector-line"
+private const val LAYER_TEMP = "cellmap-temp-layer"
+
+private const val LONG_PRESS_MILLIS = 1_500L
 
 private fun markerLayerId(ring: Int) = "$LAYER_MARKERS_PREFIX-$ring"
 private val markerLayerIds = (0 until MarkerRings.COUNT).map(::markerLayerId)
@@ -209,6 +223,7 @@ fun MapScreen(onBack: () -> Unit) {
     var appliedStyleJson by remember { mutableStateOf<String?>(null) }
     var showFilters by remember { mutableStateOf(false) }
     var showBatches by remember { mutableStateOf(false) }
+    var tempDraft by remember { mutableStateOf<TempDraft?>(null) }
 
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
@@ -282,6 +297,22 @@ fun MapScreen(onBack: () -> Unit) {
             }
             map.addOnMapClickListener { latLng ->
                 val point = map.projection.toScreenLocation(latLng)
+                val temp = runCatching {
+                    map.queryRenderedFeatures(point, LAYER_TEMP)
+                }.getOrDefault(emptyList()).firstOrNull()
+                val tempId = temp?.getNumberProperty("id")?.toLong()
+                if (tempId != null) {
+                    val marker = vm.state.value.tempMarkers.firstOrNull { it.id == tempId }
+                    if (marker != null) {
+                        tempDraft = TempDraft(
+                            id = marker.id,
+                            lat = marker.lat,
+                            lon = marker.lon,
+                            content = marker.content
+                        )
+                        return@addOnMapClickListener true
+                    }
+                }
                 val clusters = runCatching {
                     map.queryRenderedFeatures(point, LAYER_CLUSTERS, LAYER_CLUSTER_TEXT)
                 }.getOrDefault(emptyList())
@@ -310,6 +341,61 @@ fun MapScreen(onBack: () -> Unit) {
         }
     }
 
+    // 只观察触摸事件并返回 false，让地图自身的平移/缩放手势照常工作。
+    DisposableEffect(mapView) {
+        val view = mapView
+        if (view == null) {
+            onDispose { }
+        } else {
+            val handler = Handler(Looper.getMainLooper())
+            val slop = ViewConfiguration.get(view.context).scaledTouchSlop
+            var token = 0
+            var downX = 0f
+            var downY = 0f
+            view.setOnTouchListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        token += 1
+                        val current = token
+                        downX = event.x
+                        downY = event.y
+                        handler.postDelayed({
+                            if (current != token) return@postDelayed
+                            val map = mapLibreMap ?: return@postDelayed
+                            val latLng = runCatching {
+                                map.projection.fromScreenLocation(PointF(downX, downY))
+                            }.getOrNull() ?: return@postDelayed
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            tempDraft = TempDraft(
+                                id = null,
+                                lat = latLng.latitude,
+                                lon = latLng.longitude,
+                                content = ""
+                            )
+                        }, LONG_PRESS_MILLIS)
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (hypot(event.x - downX, event.y - downY) > slop) {
+                            token += 1
+                            handler.removeCallbacksAndMessages(null)
+                        }
+                    }
+                    MotionEvent.ACTION_POINTER_DOWN,
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> {
+                        token += 1
+                        handler.removeCallbacksAndMessages(null)
+                    }
+                }
+                false
+            }
+            onDispose {
+                handler.removeCallbacksAndMessages(null)
+                view.setOnTouchListener(null)
+            }
+        }
+    }
+
     LaunchedEffect(state.styleJson, mapLibreMap) {
         val map = mapLibreMap ?: return@LaunchedEffect
         val json = state.styleJson
@@ -322,6 +408,7 @@ fun MapScreen(onBack: () -> Unit) {
             style.addSource(GeoJsonSource(SOURCE_CLUSTERS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_MARKERS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_SECTORS, EMPTY_COLLECTION))
+            style.addSource(GeoJsonSource(SOURCE_TEMP, EMPTY_COLLECTION))
             style.addLayer(
                 CircleLayer(LAYER_CLUSTERS, SOURCE_CLUSTERS).withProperties(
                     circleColor("#0D47A1"),
@@ -373,6 +460,14 @@ fun MapScreen(onBack: () -> Unit) {
                         )
                 )
             }
+            style.addLayer(
+                SymbolLayer(LAYER_TEMP, SOURCE_TEMP).withProperties(
+                    iconImage(get("icon")),
+                    iconSize(0.62f),
+                    iconAllowOverlap(true),
+                    iconIgnorePlacement(true)
+                )
+            )
             loadedStyle = style
         }
     }
@@ -402,6 +497,20 @@ fun MapScreen(onBack: () -> Unit) {
                 style.getLayer(sectorFillLayerId(markerStyle.key))?.setProperties(visibility(value))
             }
             style.getLayer(LAYER_SECTOR_LINE)?.setProperties(visibility(value))
+        }
+    }
+
+    LaunchedEffect(state.tempJson, state.tempMarkers, loadedStyle) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        runCatching {
+            state.tempMarkers.forEach { marker ->
+                val name = TempMarkerOverlay.iconName(marker.id)
+                if (style.getImage(name) == null) {
+                    style.addImage(name, TempMarkerIcons.bitmap(marker.color))
+                }
+            }
+            style.getSourceAs<GeoJsonSource>(SOURCE_TEMP)
+                ?.setGeoJson(state.tempJson.ifBlank { EMPTY_COLLECTION })
         }
     }
 
@@ -524,6 +633,11 @@ fun MapScreen(onBack: () -> Unit) {
                             Text("显示全部")
                         }
                     }
+                    if (state.sectorVisible) {
+                        TextButton(onClick = vm::clearSectors) {
+                            Text("清除扇区 ${state.sectorTotal}")
+                        }
+                    }
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -636,7 +750,7 @@ fun MapScreen(onBack: () -> Unit) {
         ModalBottomSheet(onDismissRequest = vm::clearSelection) {
             StationDetail(
                 station = selected,
-                sectorVisible = state.sectorVisible,
+                sectorActive = state.selectedSectorActive,
                 sectorBusy = state.sectorBusy,
                 sectorCount = state.sectorCount,
                 onToggleSectors = vm::toggleSectors,
@@ -644,6 +758,25 @@ fun MapScreen(onBack: () -> Unit) {
                 onDismiss = vm::clearSelection
             )
         }
+    }
+
+    val draft = tempDraft
+    if (draft != null) {
+        TempMarkerDialog(
+            draft = draft,
+            onDismiss = { tempDraft = null },
+            onSave = { content ->
+                if (draft.id == null) {
+                    vm.addTempMarker(draft.lat, draft.lon, content)
+                } else {
+                    vm.updateTempMarker(draft.id, content)
+                }
+                tempDraft = null
+            },
+            onDelete = draft.id?.let { id ->
+                { vm.removeTempMarker(id); tempDraft = null }
+            }
+        )
     }
 }
 
@@ -1125,7 +1258,7 @@ private fun StationInfoRows(station: StationEntity) {
 @Composable
 private fun StationDetail(
     station: StationEntity,
-    sectorVisible: Boolean,
+    sectorActive: Boolean,
     sectorBusy: Boolean,
     sectorCount: Int,
     onToggleSectors: () -> Unit,
@@ -1172,7 +1305,7 @@ private fun StationDetail(
                     )
                     Spacer(Modifier.width(8.dp))
                 }
-                Text(if (sectorVisible) "隐藏方位角扇区" else "显示方位角扇区")
+                Text(if (sectorActive) "隐藏方位角扇区" else "显示方位角扇区")
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -1230,6 +1363,69 @@ private fun ScrollableStationInfo(station: StationEntity, modifier: Modifier = M
     }
 }
 
+
+private data class TempDraft(
+    val id: Long?,
+    val lat: Double,
+    val lon: Double,
+    val content: String
+)
+
+@Composable
+private fun TempMarkerDialog(
+    draft: TempDraft,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    onDelete: (() -> Unit)?
+) {
+    var text by remember(draft) { mutableStateOf(draft.content) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (draft.id == null) "添加临时标识" else "编辑临时标识") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    String.format(Locale.US, "%.6f, %.6f", draft.lat, draft.lon),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = {
+                        if (it.length <= 500) text = it
+                    },
+                    label = { Text("内容") },
+                    placeholder = { Text("输入这个位置的备注") },
+                    minLines = 3,
+                    maxLines = 6,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "${text.length}/500",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(text) }, enabled = text.isNotBlank()) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row {
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) {
+                        Text("删除", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("取消")
+                }
+            }
+        }
+    )
+}
 
 @Composable
 private fun MapUnavailableScreen(error: Throwable?, onBack: () -> Unit) {

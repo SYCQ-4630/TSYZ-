@@ -9,7 +9,8 @@ data class SectorCell(
     val azimuth: Double,
     val styleKey: String,
     val cellName: String,
-    val system: String
+    val system: String,
+    val radiusMeters: Double
 )
 
 /** 同站小区方位角扇区几何。仅在用户手动开启时生成，避免默认渲染开销。 */

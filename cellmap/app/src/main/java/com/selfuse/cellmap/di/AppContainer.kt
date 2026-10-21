@@ -14,6 +14,7 @@ import com.selfuse.cellmap.data.repo.OptimizationRepository
 import com.selfuse.cellmap.data.repo.ReadinessRepository
 import com.selfuse.cellmap.data.repo.StationRepository
 import com.selfuse.cellmap.data.repo.TaskCenterRepository
+import com.selfuse.cellmap.data.repo.TemporaryMarkerStore
 import com.selfuse.cellmap.data.security.KeystoreCipher
 import com.selfuse.cellmap.map.BaseMapProvider
 import com.selfuse.cellmap.work.WorkScheduler
@@ -35,6 +36,7 @@ class AppContainer(context: Context) {
     val tiles = TiandituTiles()
     val keyRepository = KeyRepository(prefs, cipher, tiles, logger)
     val stationRepository = StationRepository(database)
+    val temporaryMarkers = TemporaryMarkerStore()
     val importRepository = ImportRepository(
         context = appContext,
         db = database,
