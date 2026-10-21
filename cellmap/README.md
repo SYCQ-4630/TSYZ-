@@ -44,8 +44,8 @@ sdk.dir=/path/to/Android/Sdk
 
 | 版本 | 包名 | 适配设备 | 下载 |
 | --- | --- | --- | --- |
-| 荣耀版 1.0.9 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.0.9.apk |
-| 鸿蒙版 1.0.9 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.0.9.apk |
+| 荣耀版 1.1.0 | `com.selfuse.cellmap.honor` | 荣耀 WIN / MagicOS | https://github.com/SYCQ-4630/TSYZ-/raw/honor/cellmap-honor-1.1.0.apk |
+| 鸿蒙版 1.1.0 | `com.selfuse.cellmap.huawei` | Mate 60 Pro / HarmonyOS 6.1 + 卓易通 | https://github.com/SYCQ-4630/TSYZ-/raw/huawei/cellmap-huawei-1.1.0.apk |
 
 校验值同时放在对应分支的 `.sha256` 文件中。两版可同机共存，数据互不共享；换版本需要重新导入与标注。
 
@@ -68,7 +68,7 @@ HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要
 1. **导入数据**：选择 `.xlsx` 文件，确认表头行与字段映射后开始导入。导入在 WorkManager 前台任务中执行，可暂停、取消与重试。
 2. **分类标注**：对未分类记录逐条或批量指定四色分类，完成后确认标注结果。
 3. **压缩优化**：生成按缩放级别聚类的 GeoJSONL 数据集与索引，原始数据保持不变，可回退。
-4. **地图查询**：按搜索或管理区县定位，叠加筛选条件，查看聚合点与基站详情，支持搜索基站 ID、小区 ID 与名称；搜索结果可长按选词复制。
+4. **地图查询**：按搜索或管理区县定位，叠加筛选条件，查看聚合点与基站详情，支持搜索基站 ID、小区 ID 与名称；每条结果右侧的展开按钮可查看完整基站信息，结果与详情文本都可长按选词复制。
 
 首页会列出未完成的准备项；缺少 Key、数据或标注时，可直接跳转到对应页面。
 
@@ -103,7 +103,7 @@ HarmonyOS 6.1 使用纯鸿蒙内核，系统本身不安装 Android APK，需要
 - 地图性能：GeoJSON 在后台线程生成、点位上限随缩放级别调整、手势期间隐藏密集标记、相机位置不进入 Compose 状态、MapView 延迟到首帧后创建
 - 首页使用 LazyColumn 按需组合，任务状态由 WorkManager 变更事件推送，替代定时轮询
 - 窗口按当前分辨率请求屏幕支持的最高刷新率（30/60/90/120/144/165/185Hz 由面板决定），省电模式下不强制；系统仍可按温度与内容动态降频
-- 搜索结果文本支持长按选择与复制
+- 搜索结果可展开查看完整基站信息，搜索结果与详情文本支持长按选择与复制
 - 后台任务使用前台 Worker 与通知，支持进度、取消与失败重试；容器禁止前台服务时自动降级为普通后台任务
 - 原生库安装时解压（legacy packaging），兼容卓易通等虚拟容器的 `.so` 加载
 - 诊断日志除写入 `Download` 外，可在管理页通过系统分享导出

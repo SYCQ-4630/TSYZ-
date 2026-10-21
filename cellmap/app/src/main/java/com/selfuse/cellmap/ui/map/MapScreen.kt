@@ -14,15 +14,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Search
@@ -408,7 +412,11 @@ fun MapScreen(onBack: () -> Unit) {
                     onClear = vm::clearQuery
                 )
                 if (state.searchQuery.isNotBlank() && state.searchResults.isNotEmpty()) {
-                    SearchResults(state, onSelect = vm::selectSearch)
+                    SearchResults(
+                        state = state,
+                        onSelect = vm::selectSearch,
+                        onToggleDetail = vm::toggleSearchDetail
+                    )
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -568,7 +576,11 @@ private fun SearchBar(
 }
 
 @Composable
-private fun SearchResults(state: MapUiState, onSelect: (com.selfuse.cellmap.core.model.SearchHit) -> Unit) {
+private fun SearchResults(
+    state: MapUiState,
+    onSelect: (com.selfuse.cellmap.core.model.SearchHit) -> Unit,
+    onToggleDetail: (com.selfuse.cellmap.core.model.SearchHit) -> Unit
+) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -578,27 +590,84 @@ private fun SearchResults(state: MapUiState, onSelect: (com.selfuse.cellmap.core
         Column {
             state.searchResults.take(6).forEachIndexed { index, hit ->
                 if (index > 0) DividerSpacer()
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(hit) }
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    SelectionContainer {
-                        Column {
-                            Text(
-                                hit.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                val expanded = state.expandedSearchId == hit.id
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(hit) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SelectionContainer {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 14.dp, top = 10.dp, bottom = 10.dp)
+                            ) {
+                                Text(
+                                    hit.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    hit.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        IconButton(onClick = { onToggleDetail(hit) }) {
+                            Icon(
+                                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                contentDescription = if (expanded) "收起基站详情" else "展开基站详情"
                             )
-                            Text(
-                                hit.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                        }
+                    }
+                    if (expanded) {
+                        DividerSpacer()
+                        val station = state.expandedStation
+                        if (station == null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    "正在读取基站详情",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 320.dp)
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    "长按文字可选择复制",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                SelectionContainer {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        StationInfoRows(station)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -807,6 +876,27 @@ private fun SelectionDropdown(
 }
 
 @Composable
+private fun StationInfoRows(station: StationEntity) {
+    KeyValueRow("制式", station.system)
+    KeyValueRow("基站 ID", station.stationId)
+    KeyValueRow("小区 ID", station.cellId)
+    KeyValueRow("承建方", station.builder.orEmpty().ifBlank { "—" })
+    KeyValueRow("运营商", station.operator.orEmpty().ifBlank { "—" })
+    KeyValueRow("是否共享", station.shared.orEmpty().ifBlank { "未知" })
+    KeyValueRow("网元归属", station.owner.orEmpty().ifBlank { "—" })
+    KeyValueRow("管理区县", station.district.orEmpty().ifBlank { "—" })
+    KeyValueRow("覆盖类别", station.category.orEmpty().ifBlank { "—" })
+    KeyValueRow("频段", station.band.orEmpty().ifBlank { "—" })
+    KeyValueRow("站址名称", station.siteName.orEmpty().ifBlank { "—" })
+    KeyValueRow("天线挂高", station.antennaHeight.orEmpty().ifBlank { "—" })
+    KeyValueRow("45G 共设备", station.coDevice45G.orEmpty().ifBlank { "—" })
+    KeyValueRow(
+        "坐标",
+        String.format(Locale.US, "%.6f, %.6f", station.lat, station.lon)
+    )
+}
+
+@Composable
 private fun StationDetail(
     station: StationEntity,
     onFocus: () -> Unit,
@@ -831,23 +921,11 @@ private fun StationDetail(
             }
         }
         Spacer(Modifier.height(6.dp))
-        KeyValueRow("制式", station.system)
-        KeyValueRow("基站 ID", station.stationId)
-        KeyValueRow("小区 ID", station.cellId)
-        KeyValueRow("承建方", station.builder.orEmpty().ifBlank { "—" })
-        KeyValueRow("运营商", station.operator.orEmpty().ifBlank { "—" })
-        KeyValueRow("是否共享", station.shared.orEmpty().ifBlank { "未知" })
-        KeyValueRow("网元归属", station.owner.orEmpty().ifBlank { "—" })
-        KeyValueRow("管理区县", station.district.orEmpty().ifBlank { "—" })
-        KeyValueRow("覆盖类别", station.category.orEmpty().ifBlank { "—" })
-        KeyValueRow("频段", station.band.orEmpty().ifBlank { "—" })
-        KeyValueRow("站址名称", station.siteName.orEmpty().ifBlank { "—" })
-        KeyValueRow("天线挂高", station.antennaHeight.orEmpty().ifBlank { "—" })
-        KeyValueRow("45G 共设备", station.coDevice45G.orEmpty().ifBlank { "—" })
-        KeyValueRow(
-            "坐标",
-            String.format(Locale.US, "%.6f, %.6f", station.lat, station.lon)
-        )
+        SelectionContainer {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                StationInfoRows(station)
+            }
+        }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {

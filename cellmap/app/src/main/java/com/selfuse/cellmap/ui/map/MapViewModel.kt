@@ -65,7 +65,9 @@ data class MapUiState(
     val focus: FocusRequest? = null,
     val message: String? = null,
     val annotationsVisible: Boolean = true,
-    val textureMode: Boolean = false
+    val textureMode: Boolean = false,
+    val expandedSearchId: Long? = null,
+    val expandedStation: StationEntity? = null
 ) {
     val canRender: Boolean get() = readiness.dataReady && readiness.labelReady
 }
@@ -231,7 +233,14 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
 
     fun setSystem(system: NetworkSystem) {
         if (_state.value.system == system) return
-        _state.update { it.copy(system = system, searchResults = emptyList()) }
+        _state.update {
+            it.copy(
+                system = system,
+                searchResults = emptyList(),
+                expandedSearchId = null,
+                expandedStation = null
+            )
+        }
         reloadViewport()
         runSearch()
     }
@@ -261,12 +270,26 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     }
 
     fun onQueryChange(query: String) {
-        _state.update { it.copy(searchQuery = query) }
+        _state.update {
+            it.copy(
+                searchQuery = query,
+                expandedSearchId = null,
+                expandedStation = null
+            )
+        }
         runSearch()
     }
 
     fun clearQuery() {
-        _state.update { it.copy(searchQuery = "", searchResults = emptyList(), searching = false) }
+        _state.update {
+            it.copy(
+                searchQuery = "",
+                searchResults = emptyList(),
+                searching = false,
+                expandedSearchId = null,
+                expandedStation = null
+            )
+        }
         searchJob?.cancel()
     }
 
@@ -292,7 +315,32 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     fun selectSearch(hit: SearchHit) {
         focus(hit.lat, hit.lon, 15.5)
         selectStation(hit.id)
-        _state.update { it.copy(searchResults = emptyList()) }
+        _state.update {
+            it.copy(
+                searchResults = emptyList(),
+                expandedSearchId = null,
+                expandedStation = null
+            )
+        }
+    }
+
+    fun toggleSearchDetail(hit: SearchHit) {
+        if (_state.value.expandedSearchId == hit.id) {
+            _state.update { it.copy(expandedSearchId = null, expandedStation = null) }
+            return
+        }
+        _state.update { it.copy(expandedSearchId = hit.id, expandedStation = null) }
+        viewModelScope.launch {
+            val station = runCatching { c.stationRepository.byId(hit.id) }.getOrNull()
+            if (_state.value.expandedSearchId != hit.id) return@launch
+            if (station == null) {
+                _state.update {
+                    it.copy(expandedSearchId = null, message = "未能读取基站详情")
+                }
+            } else {
+                _state.update { it.copy(expandedStation = station) }
+            }
+        }
     }
 
     fun selectStation(id: Long) {
