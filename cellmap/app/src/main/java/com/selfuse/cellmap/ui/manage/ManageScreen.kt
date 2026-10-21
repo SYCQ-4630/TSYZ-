@@ -369,14 +369,14 @@ private fun DataTab(
         if (state.batches.isEmpty()) {
             item { EmptyHint("还没有导入记录") }
         }
-        items(state.batches, key = { it.id }) { batch ->
+        items(state.batches, key = { "batch-${it.id}" }) { batch ->
             BatchRow(batch = batch, onDelete = { onDeleteBatch(batch) })
         }
         item { SectionHeader("优化记录") }
         if (state.optimizationRuns.isEmpty()) {
             item { EmptyHint("还没有优化记录") }
         }
-        items(state.optimizationRuns, key = { it.id }) { run ->
+        items(state.optimizationRuns, key = { "opt-${it.id}" }) { run ->
             OptimizationRow(run)
         }
         item { Spacer(Modifier.height(8.dp)) }

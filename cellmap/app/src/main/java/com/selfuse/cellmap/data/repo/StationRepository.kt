@@ -25,7 +25,8 @@ class StationRepository(private val db: AppDatabase) {
         filters: MarkerFilters,
         optimizeReady: Boolean,
         zoom: Double,
-        limit: Int = 0
+        limit: Int = 0,
+        batchId: Long? = null
     ): ViewportSnapshot = withContext(Dispatchers.IO) {
         val effectiveLimit = if (limit > 0) limit else limitForZoom(zoom)
         val optimizedMarkers = if (optimizeReady) db.optimizationDao().markerCount() else 0
@@ -45,7 +46,7 @@ class StationRepository(private val db: AppDatabase) {
                 truncated = entities.size >= effectiveLimit
             )
         } else {
-            val entities = queryRaw(bounds, system, filters, effectiveLimit)
+            val entities = queryRaw(bounds, system, filters, effectiveLimit, batchId)
             ViewportSnapshot(
                 markers = entities.mapNotNull { it.toMapMarker() },
                 usingOptimized = false,
@@ -58,10 +59,11 @@ class StationRepository(private val db: AppDatabase) {
         query: String,
         system: NetworkSystem,
         filters: MarkerFilters,
-        limit: Int = 30
+        limit: Int = 30,
+        batchId: Long? = null
     ): List<SearchHit> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        val rows = runCatching { likeSearch(query, system, filters, limit) }
+        val rows = runCatching { likeSearch(query, system, filters, limit, batchId) }
             .getOrDefault(emptyList())
         rows.mapNotNull { station ->
             val style = MarkerStyle.fromKey(station.markerStyle)
@@ -86,6 +88,14 @@ class StationRepository(private val db: AppDatabase) {
         db.stationDao().byId(id)
     }
 
+    suspend fun sectorCellCount(station: StationEntity): Int = withContext(Dispatchers.IO) {
+        db.stationDao().sectorCellCount(station.stationId, station.system, station.lat, station.lon)
+    }
+
+    suspend fun sectorCells(station: StationEntity): List<StationEntity> = withContext(Dispatchers.IO) {
+        db.stationDao().sectorCells(station.stationId, station.system, station.lat, station.lon)
+    }
+
     suspend fun distinctDistricts(): List<String> = withContext(Dispatchers.IO) {
         db.stationDao().distinctDistricts()
     }
@@ -106,9 +116,10 @@ class StationRepository(private val db: AppDatabase) {
         bounds: GeoBounds,
         system: NetworkSystem,
         filters: MarkerFilters,
-        limit: Int
+        limit: Int,
+        batchId: Long? = null
     ): List<StationMarkerRow> {
-        val (where, args) = buildFilters(filters, "s", system, includeSystem = true)
+        val (where, args) = buildFilters(filters, "s", system, includeSystem = true, batchId = batchId)
         val sql = buildString {
             append("SELECT s.id, s.lat, s.lon, s.markerStyle, s.system, ")
             append("s.cellName, s.siteName, s.stationId, s.cellId ")
@@ -161,18 +172,20 @@ class StationRepository(private val db: AppDatabase) {
         query: String,
         system: NetworkSystem,
         filters: MarkerFilters,
-        limit: Int
+        limit: Int,
+        batchId: Long? = null
     ): List<StationEntity> {
-        val (where, args) = buildFilters(filters, "s", system, includeSystem = true)
+        val (where, args) = buildFilters(filters, "s", system, includeSystem = true, batchId = batchId)
         val like = "%${query.replace("%", "\\%").replace("_", "\\_")}%"
         val sql = buildString {
             append("SELECT s.* FROM stations s WHERE (")
             append("s.cellName LIKE ? ESCAPE '\\' OR s.siteName LIKE ? ESCAPE '\\' ")
-            append("OR s.stationId LIKE ? ESCAPE '\\' OR s.cellId LIKE ? ESCAPE '\\') ")
+            append("OR s.stationId LIKE ? ESCAPE '\\' OR s.cellId LIKE ? ESCAPE '\\' ")
+            append("OR s.searchText LIKE ? ESCAPE '\\') ")
             if (where.isNotBlank()) append("AND ").append(where).append(' ')
             append("LIMIT ?")
         }
-        val sqlArgs = (listOf<Any?>(like, like, like, like) + args + limit).toTypedArray()
+        val sqlArgs = (listOf<Any?>(like, like, like, like, like) + args + limit).toTypedArray()
         return db.stationDao().rawQuery(SimpleSQLiteQuery(sql, sqlArgs))
     }
 
@@ -180,7 +193,8 @@ class StationRepository(private val db: AppDatabase) {
         filters: MarkerFilters,
         alias: String,
         system: NetworkSystem,
-        includeSystem: Boolean
+        includeSystem: Boolean,
+        batchId: Long? = null
     ): Pair<String, List<Any?>> {
         val clauses = mutableListOf<String>()
         val args = mutableListOf<Any?>()
@@ -211,6 +225,10 @@ class StationRepository(private val db: AppDatabase) {
         if (filters.category.isNotBlank()) {
             clauses.add("$alias.category = ?")
             args.add(filters.category.trim())
+        }
+        if (batchId != null) {
+            clauses.add("$alias.batchId = ?")
+            args.add(batchId)
         }
         return clauses.joinToString(" AND ") to args
     }

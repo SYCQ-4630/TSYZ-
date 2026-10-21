@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -33,8 +34,11 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -92,6 +96,7 @@ import com.selfuse.cellmap.diagnostics.CrashDiagnostics
 import com.selfuse.cellmap.map.BaseMapProvider
 import com.selfuse.cellmap.map.MapLibreRuntime
 import com.selfuse.cellmap.map.MarkerIconCache
+import com.selfuse.cellmap.map.MarkerRings
 import com.selfuse.cellmap.ui.components.AppTopBar
 import com.selfuse.cellmap.ui.components.DividerSpacer
 import com.selfuse.cellmap.ui.components.KeyValueRow
@@ -100,6 +105,10 @@ import com.selfuse.cellmap.ui.components.StatusPill
 import com.selfuse.cellmap.ui.theme.RiskHigh
 import com.selfuse.cellmap.ui.theme.RiskLow
 import com.selfuse.cellmap.ui.theme.RiskMedium
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -107,18 +116,27 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.expressions.Expression.get
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.layers.PropertyFactory.circleColor
 import org.maplibre.android.style.layers.PropertyFactory.circleOpacity
 import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.iconOffset
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.fillColor
+import org.maplibre.android.style.layers.PropertyFactory.fillOpacity
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconSize
+import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
+import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.PropertyFactory.textAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.textColor
 import org.maplibre.android.style.layers.PropertyFactory.textField
@@ -133,8 +151,15 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 
 private const val SOURCE_MARKERS = "cellmap-markers"
+private const val SOURCE_SECTORS = "cellmap-sectors"
 private const val SOURCE_CLUSTERS = "cellmap-clusters"
-private const val LAYER_MARKERS = "cellmap-marker-layer"
+private const val LAYER_MARKERS_PREFIX = "cellmap-marker-layer"
+private const val LAYER_SECTOR_LINE = "cellmap-sector-line"
+
+private fun markerLayerId(ring: Int) = "$LAYER_MARKERS_PREFIX-$ring"
+private val markerLayerIds = (0 until MarkerRings.COUNT).map(::markerLayerId)
+
+private fun sectorFillLayerId(styleKey: String) = "cellmap-sector-fill-$styleKey"
 private const val LAYER_CLUSTERS = "cellmap-cluster-layer"
 private const val LAYER_CLUSTER_TEXT = "cellmap-cluster-text"
 private const val EMPTY_COLLECTION = "{\"type\":\"FeatureCollection\",\"features\":[]}"
@@ -183,6 +208,7 @@ fun MapScreen(onBack: () -> Unit) {
     var loadedStyle by remember { mutableStateOf<Style?>(null) }
     var appliedStyleJson by remember { mutableStateOf<String?>(null) }
     var showFilters by remember { mutableStateOf(false) }
+    var showBatches by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
@@ -271,7 +297,7 @@ fun MapScreen(onBack: () -> Unit) {
                     return@addOnMapClickListener true
                 }
                 val marker = runCatching {
-                    map.queryRenderedFeatures(point, LAYER_MARKERS)
+                    map.queryRenderedFeatures(point, *markerLayerIds.toTypedArray())
                 }.getOrDefault(emptyList()).firstOrNull()
                 val id = marker?.getStringProperty("sid")?.toLongOrNull()
                 if (id != null) {
@@ -295,6 +321,7 @@ fun MapScreen(onBack: () -> Unit) {
             icons.forEach { (name, bitmap) -> style.addImage(name, bitmap) }
             style.addSource(GeoJsonSource(SOURCE_CLUSTERS, EMPTY_COLLECTION))
             style.addSource(GeoJsonSource(SOURCE_MARKERS, EMPTY_COLLECTION))
+            style.addSource(GeoJsonSource(SOURCE_SECTORS, EMPTY_COLLECTION))
             style.addLayer(
                 CircleLayer(LAYER_CLUSTERS, SOURCE_CLUSTERS).withProperties(
                     circleColor("#0D47A1"),
@@ -314,14 +341,38 @@ fun MapScreen(onBack: () -> Unit) {
                     textFont(arrayOf("Noto Sans Regular", "Open Sans Regular"))
                 )
             )
+            MarkerStyle.entries.forEach { markerStyle ->
+                style.addLayer(
+                    FillLayer(sectorFillLayerId(markerStyle.key), SOURCE_SECTORS)
+                        .withFilter(Expression.eq(Expression.get("style"), markerStyle.key))
+                        .withProperties(
+                            fillColor(markerStyle.colorHex.toInt()),
+                            fillOpacity(0.28f),
+                            visibility("none")
+                        )
+                )
+            }
             style.addLayer(
-                SymbolLayer(LAYER_MARKERS, SOURCE_MARKERS).withProperties(
-                    iconImage(get("icon")),
-                    iconSize(0.62f),
-                    iconAllowOverlap(true),
-                    iconIgnorePlacement(true)
+                LineLayer(LAYER_SECTOR_LINE, SOURCE_SECTORS).withProperties(
+                    lineColor("#FFFFFF"),
+                    lineWidth(1.2f),
+                    lineOpacity(0.85f),
+                    visibility("none")
                 )
             )
+            for (ring in 0 until MarkerRings.COUNT) {
+                style.addLayer(
+                    SymbolLayer(markerLayerId(ring), SOURCE_MARKERS)
+                        .withFilter(Expression.eq(Expression.get("ring"), ring))
+                        .withProperties(
+                            iconImage(get("icon")),
+                            iconSize(0.62f),
+                            iconOffset(MarkerRings.offset(ring)),
+                            iconAllowOverlap(true),
+                            iconIgnorePlacement(true)
+                        )
+                )
+            }
             loadedStyle = style
         }
     }
@@ -332,6 +383,25 @@ fun MapScreen(onBack: () -> Unit) {
         if (json.isBlank()) return@LaunchedEffect
         runCatching {
             style.getSourceAs<GeoJsonSource>(SOURCE_MARKERS)?.setGeoJson(json)
+        }
+    }
+
+    LaunchedEffect(state.sectorJson, loadedStyle) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        val json = state.sectorJson.ifBlank { EMPTY_COLLECTION }
+        runCatching {
+            style.getSourceAs<GeoJsonSource>(SOURCE_SECTORS)?.setGeoJson(json)
+        }
+    }
+
+    LaunchedEffect(state.sectorVisible, loadedStyle) {
+        val style = loadedStyle ?: return@LaunchedEffect
+        val value = if (state.sectorVisible) "visible" else "none"
+        runCatching {
+            MarkerStyle.entries.forEach { markerStyle ->
+                style.getLayer(sectorFillLayerId(markerStyle.key))?.setProperties(visibility(value))
+            }
+            style.getLayer(LAYER_SECTOR_LINE)?.setProperties(visibility(value))
         }
     }
 
@@ -429,6 +499,36 @@ fun MapScreen(onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val activeBatch = state.batches.firstOrNull { it.id == state.selectedBatchId }
+                    OutlinedButton(
+                        onClick = { showBatches = true },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Icon(
+                            Icons.Filled.TableChart,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            activeBatch?.fileName ?: "全部表格",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 150.dp)
+                        )
+                    }
+                    if (activeBatch != null) {
+                        TextButton(onClick = { vm.setBatch(null) }) {
+                            Text("显示全部")
+                        }
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     val chipColors = FilterChipDefaults.filterChipColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         labelColor = MaterialTheme.colorScheme.onSurface,
@@ -520,11 +620,26 @@ fun MapScreen(onBack: () -> Unit) {
         )
     }
 
+    if (showBatches) {
+        BatchSheet(
+            state = state,
+            onSelect = {
+                vm.setBatch(it)
+                showBatches = false
+            },
+            onDismiss = { showBatches = false }
+        )
+    }
+
     val selected = state.selected
     if (selected != null) {
         ModalBottomSheet(onDismissRequest = vm::clearSelection) {
             StationDetail(
                 station = selected,
+                sectorVisible = state.sectorVisible,
+                sectorBusy = state.sectorBusy,
+                sectorCount = state.sectorCount,
+                onToggleSectors = vm::toggleSectors,
                 onFocus = { vm.focusOn(selected.lat, selected.lon) },
                 onDismiss = vm::clearSelection
             )
@@ -537,7 +652,7 @@ private fun Style.setCellMapLayersVisible(visible: Boolean) {
     runCatching {
         getLayer(LAYER_CLUSTERS)?.setProperties(visibility(value))
         getLayer(LAYER_CLUSTER_TEXT)?.setProperties(visibility(value))
-        getLayer(LAYER_MARKERS)?.setProperties(visibility(value))
+        markerLayerIds.forEach { id -> getLayer(id)?.setProperties(visibility(value)) }
     }
 }
 
@@ -679,6 +794,98 @@ private fun SearchResults(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StationExtraRows(extraJson: String) {
+    val rows = remember(extraJson) {
+        runCatching {
+            Json.parseToJsonElement(extraJson).jsonObject.entries.mapNotNull { (key, value) ->
+                value.jsonPrimitive.contentOrNull
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { key to it }
+            }
+        }.getOrDefault(emptyList())
+    }
+    rows.forEach { (label, value) -> KeyValueRow(label, value) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BatchSheet(
+    state: MapUiState,
+    onSelect: (Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text("选择数据表", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "仅查询所选 XLSX 生成的标注；每张表的表头会独立保存并显示在基站详情中。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                BatchOptionRow(
+                    title = "全部表格",
+                    subtitle = "共 ${state.batches.size} 张已导入表格",
+                    selected = state.selectedBatchId == null,
+                    onClick = { onSelect(null) }
+                )
+                state.batches.forEach { batch ->
+                    DividerSpacer()
+                    BatchOptionRow(
+                        title = batch.fileName,
+                        subtitle = "成功 ${Formats.number(batch.successRows)} · " +
+                            "失败 ${Formats.number(batch.failedRows)} · ${batch.sheetName}",
+                        selected = state.selectedBatchId == batch.id,
+                        onClick = { onSelect(batch.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BatchOptionRow(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(Modifier.width(6.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -908,6 +1115,7 @@ private fun StationInfoRows(station: StationEntity) {
     KeyValueRow("AAU 数量", station.aauCount.orEmpty().ifBlank { "—" })
     KeyValueRow("RRU 数量", station.rruCount.orEmpty().ifBlank { "—" })
     KeyValueRow("45G 共设备", station.coDevice45G.orEmpty().ifBlank { "—" })
+    StationExtraRows(station.extraJson)
     KeyValueRow(
         "坐标",
         String.format(Locale.US, "%.6f, %.6f", station.lat, station.lon)
@@ -917,6 +1125,10 @@ private fun StationInfoRows(station: StationEntity) {
 @Composable
 private fun StationDetail(
     station: StationEntity,
+    sectorVisible: Boolean,
+    sectorBusy: Boolean,
+    sectorCount: Int,
+    onToggleSectors: () -> Unit,
     onFocus: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -946,6 +1158,23 @@ private fun StationDetail(
                 .weight(1f)
                 .fillMaxWidth()
         )
+        if (sectorCount > 0) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onToggleSectors,
+                enabled = !sectorBusy,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (sectorBusy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(if (sectorVisible) "隐藏方位角扇区" else "显示方位角扇区")
+            }
+        }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {

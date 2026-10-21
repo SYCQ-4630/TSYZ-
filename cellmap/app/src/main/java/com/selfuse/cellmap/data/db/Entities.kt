@@ -52,6 +52,8 @@ data class StationEntity(
     val antennaGain: String? = null,
     val aauCount: String? = null,
     val rruCount: String? = null,
+    val extraJson: String = "{}",
+    val searchText: String = "",
     val system: String,
     val markerStyle: String? = null,
     val searchBlob: String = "",

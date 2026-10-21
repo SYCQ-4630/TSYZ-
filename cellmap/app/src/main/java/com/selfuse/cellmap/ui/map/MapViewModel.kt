@@ -13,11 +13,15 @@ import com.selfuse.cellmap.core.model.MarkerStyle
 import com.selfuse.cellmap.core.model.NetworkSystem
 import com.selfuse.cellmap.core.model.ReadinessState
 import com.selfuse.cellmap.core.model.SearchHit
+import com.selfuse.cellmap.core.model.SectorCell
+import com.selfuse.cellmap.core.model.SectorGeometry
 import com.selfuse.cellmap.core.util.GeoBounds
+import com.selfuse.cellmap.data.db.ImportBatchEntity
 import com.selfuse.cellmap.data.db.StationEntity
 import com.selfuse.cellmap.data.key.ProbeResult
 import com.selfuse.cellmap.data.key.SessionKey
 import com.selfuse.cellmap.map.GeoJsonBuilder
+import com.selfuse.cellmap.map.SectorOverlay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.pow
 
 @Immutable
@@ -54,6 +59,8 @@ data class MapUiState(
     val filters: MarkerFilters = MarkerFilters(),
     val districts: List<String> = emptyList(),
     val bands: List<String> = emptyList(),
+    val batches: List<ImportBatchEntity> = emptyList(),
+    val selectedBatchId: Long? = null,
     val searchQuery: String = "",
     val searching: Boolean = false,
     val searchResults: List<SearchHit> = emptyList(),
@@ -67,7 +74,11 @@ data class MapUiState(
     val annotationsVisible: Boolean = true,
     val textureMode: Boolean = false,
     val expandedSearchId: Long? = null,
-    val expandedStation: StationEntity? = null
+    val expandedStation: StationEntity? = null,
+    val sectorVisible: Boolean = false,
+    val sectorBusy: Boolean = false,
+    val sectorCount: Int = 0,
+    val sectorJson: String = ""
 ) {
     val canRender: Boolean get() = readiness.dataReady && readiness.labelReady
 }
@@ -86,6 +97,7 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     private var basemapSession: SessionKey? = null
     private var lastUsageAt = 0L
     private var cameraZoom = _state.value.zoom
+    private var selectionSeq = 0L
 
     init {
         viewModelScope.launch {
@@ -104,8 +116,39 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                 _state.update { it.copy(textureMode = enabled) }
             }
         }
+        viewModelScope.launch {
+            c.importRepository.batches.collect { all ->
+                val batches = all.filter { it.successRows > 0 }
+                val current = _state.value.selectedBatchId
+                val valid = current?.takeIf { id -> batches.any { it.id == id } }
+                _state.update { it.copy(batches = batches, selectedBatchId = valid) }
+                if (valid != current) {
+                    reloadViewport()
+                    runSearch()
+                }
+            }
+        }
         refreshBasemap()
         loadFilterOptions()
+    }
+
+    fun setBatch(batchId: Long?) {
+        if (_state.value.selectedBatchId == batchId) return
+        selectionSeq += 1
+        _state.update {
+            it.copy(
+                selectedBatchId = batchId,
+                selected = null,
+                searchResults = emptyList(),
+                expandedSearchId = null,
+                expandedStation = null,
+                sectorVisible = false,
+                sectorCount = 0,
+                sectorJson = ""
+            )
+        }
+        reloadViewport()
+        runSearch()
     }
 
     fun refreshBasemap() {
@@ -199,8 +242,10 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
                     bounds = bounds,
                     system = _state.value.system,
                     filters = _state.value.filters,
-                    optimizeReady = c.readiness.state.value.optimizeReady,
-                    zoom = cameraZoom
+                    optimizeReady = c.readiness.state.value.optimizeReady &&
+                        _state.value.selectedBatchId == null,
+                    zoom = cameraZoom,
+                    batchId = _state.value.selectedBatchId
                 )
             }.getOrElse { error ->
                 _state.update { it.copy(loading = false, message = error.message ?: "加载视口失败") }
@@ -233,12 +278,16 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
 
     fun setSystem(system: NetworkSystem) {
         if (_state.value.system == system) return
+        selectionSeq += 1
         _state.update {
             it.copy(
                 system = system,
                 searchResults = emptyList(),
                 expandedSearchId = null,
-                expandedStation = null
+                expandedStation = null,
+                sectorVisible = false,
+                sectorCount = 0,
+                sectorJson = ""
             )
         }
         reloadViewport()
@@ -304,7 +353,12 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
             delay(240)
             _state.update { it.copy(searching = true) }
             val hits = runCatching {
-                c.stationRepository.search(query, _state.value.system, _state.value.filters)
+                c.stationRepository.search(
+                    query = query,
+                    system = _state.value.system,
+                    filters = _state.value.filters,
+                    batchId = _state.value.selectedBatchId
+                )
             }.getOrDefault(emptyList())
             if (_state.value.searchQuery == query) {
                 _state.update { it.copy(searching = false, searchResults = hits) }
@@ -344,10 +398,85 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     }
 
     fun selectStation(id: Long) {
+        val seq = ++selectionSeq
         viewModelScope.launch {
             val station = runCatching { c.stationRepository.byId(id) }.getOrNull()
-            _state.update { it.copy(selected = station) }
+            if (seq != selectionSeq) return@launch
+            val sectors = station?.let {
+                runCatching { c.stationRepository.sectorCellCount(it) }.getOrDefault(0)
+            } ?: 0
+            if (seq != selectionSeq) return@launch
+            _state.update {
+                it.copy(
+                    selected = station,
+                    sectorVisible = false,
+                    sectorBusy = false,
+                    sectorCount = sectors,
+                    sectorJson = ""
+                )
+            }
         }
+    }
+
+    /**
+     * 扇区覆盖默认关闭，仅在用户点击后查询同站小区并生成几何，
+     * 数量受 [SectorGeometry.MAX_CELLS] 限制，避免大量绘制拖慢地图。
+     */
+    fun toggleSectors() {
+        val station = _state.value.selected ?: return
+        if (_state.value.sectorBusy) return
+        if (_state.value.sectorVisible) {
+            _state.update { it.copy(sectorVisible = false) }
+            return
+        }
+        val seq = selectionSeq
+        viewModelScope.launch {
+            _state.update { it.copy(sectorBusy = true) }
+            val entities = runCatching { c.stationRepository.sectorCells(station) }
+                .getOrDefault(emptyList())
+            if (seq != selectionSeq) return@launch
+            val sectors = entities.mapNotNull { entity ->
+                val azimuth = SectorGeometry.parseAzimuth(entity.azimuth) ?: return@mapNotNull null
+                val style = MarkerStyle.fromKey(entity.markerStyle) ?: return@mapNotNull null
+                SectorCell(
+                    lat = entity.lat,
+                    lon = entity.lon,
+                    azimuth = azimuth,
+                    styleKey = style.key,
+                    cellName = entity.cellName ?: entity.cellId,
+                    system = entity.system
+                )
+            }.distinctBy { (it.azimuth * 10).toInt() }
+                .take(SectorGeometry.MAX_CELLS)
+            if (sectors.isEmpty()) {
+                _state.update {
+                    it.copy(sectorBusy = false, message = "该基站没有可用的方位角数据")
+                }
+                return@launch
+            }
+            val radius = sectorRadiusMeters(station.lat)
+            val json = runCatching {
+                withContext(Dispatchers.Default) { SectorOverlay.geoJson(sectors, radius) }
+            }.getOrNull()
+            if (json == null) {
+                _state.update { it.copy(sectorBusy = false, message = "扇区生成失败") }
+                return@launch
+            }
+            _state.update {
+                it.copy(
+                    sectorBusy = false,
+                    sectorVisible = true,
+                    sectorCount = sectors.size,
+                    sectorJson = json
+                )
+            }
+        }
+    }
+
+    private fun sectorRadiusMeters(lat: Double): Double {
+        val zoom = cameraZoom.coerceIn(3.0, 20.0)
+        val metersPerPixel = 156_543.03392 * cos(Math.toRadians(lat)) / 2.0.pow(zoom)
+        return (metersPerPixel * 80).coerceIn(50.0, 600.0)
     }
 
     fun focusOn(lat: Double, lon: Double, zoom: Double = 16.0) {
@@ -356,7 +485,16 @@ class MapViewModel(app: CellMapApp) : ViewModel() {
     }
 
     fun clearSelection() {
-        _state.update { it.copy(selected = null) }
+        selectionSeq += 1
+        _state.update {
+            it.copy(
+                selected = null,
+                sectorVisible = false,
+                sectorBusy = false,
+                sectorCount = 0,
+                sectorJson = ""
+            )
+        }
     }
 
     fun setAnnotationsVisible(visible: Boolean) {

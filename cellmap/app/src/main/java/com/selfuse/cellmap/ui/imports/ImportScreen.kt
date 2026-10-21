@@ -336,7 +336,7 @@ private fun MappingCard(
             Text("字段映射", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "自动按表头名称匹配，可手动调整。标 * 的为必填字段。",
+                "自动按表头名称匹配，可手动调整。标 * 的为必填字段。未映射的列会按原表头收录到基站详情，并参与地图搜索。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

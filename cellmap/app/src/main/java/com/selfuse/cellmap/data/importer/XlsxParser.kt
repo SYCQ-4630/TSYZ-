@@ -15,6 +15,8 @@ import java.io.InputStream
 import java.math.BigDecimal
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.xml.parsers.SAXParserFactory
 
 data class SheetPreview(
@@ -380,6 +382,7 @@ class XlsxParser {
     ) : SheetSink {
 
         private var current = linkedMapOf<Int, String>()
+        private var headerCells: List<String> = emptyList()
         private val pending = mutableListOf<StationDraft>()
         private val failures = mutableListOf<String>()
         var seenDataRows = 0
@@ -397,6 +400,11 @@ class XlsxParser {
 
         override fun endRow(rowNum: Int) {
             if (isCancelled()) throw XlsxCancelled()
+            if (rowNum == headerRow) {
+                val last = current.keys.maxOrNull() ?: -1
+                headerCells = if (last < 0) emptyList() else (0..last).map { current[it].orEmpty() }
+                return
+            }
             if (rowNum <= headerRow || current.isEmpty()) return
             val index = seenDataRows
             seenDataRows++
@@ -469,6 +477,22 @@ class XlsxParser {
             val system = resolveSystem(systemRaw, bandRaw, cellName, siteName, category)
                 ?: throw RowFailure("频段/制式无法识别为 4G/5G")
 
+            val usedColumns = mapping.values.toSet()
+            val extras = linkedMapOf<String, String>()
+            val searchParts = LinkedHashSet<String>(values.size)
+            values.forEach { (column, raw) ->
+                val value = clean(raw) ?: return@forEach
+                searchParts.add(value)
+                if (column in usedColumns) return@forEach
+                val base = clean(headerCells.getOrNull(column)) ?: "列${column + 1}"
+                var name = base
+                var suffix = 2
+                while (extras.containsKey(name)) {
+                    name = "$base(${suffix++})"
+                }
+                extras[name] = value
+            }
+
             return StationDraft(
                 lat = lat,
                 lon = lon,
@@ -495,6 +519,8 @@ class XlsxParser {
                 antennaGain = raw(StationField.ANTENNA_GAIN),
                 aauCount = raw(StationField.AAU_COUNT),
                 rruCount = raw(StationField.RRU_COUNT),
+                extraJson = extrasJson.encodeToString(extras),
+                searchText = searchParts.joinToString(" ").take(2000),
                 system = system.label,
                 operatorNorm = Normalizer.operator(operator).label,
                 builderNorm = Normalizer.builder(builder).label,
@@ -608,6 +634,8 @@ fun columnLetter(index: Int): String {
     }
     return builder.reverse().toString()
 }
+
+private val extrasJson = Json { encodeDefaults = true }
 
 fun columnIndex(reference: String?): Int {
     if (reference.isNullOrBlank()) return -1
