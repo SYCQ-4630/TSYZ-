@@ -1,2 +1,2 @@
-25d0c298070eee2bef8e51d91ccc0dc16b514549584dea514b7a24e24f33e7bb  dist/TicketTool-1.0.0-win-x64.zip
-b27206aa93d3162177e385f0636b9643f29a3d095d684dc3aaacbc08c18fa6ec  dist/TicketTool-1.0.0-win-x86.zip
+cc8dd4597d3b413cfd97e20b157eb3b29f17a566f7d8765887a7d342ac59cfae  dist/TicketTool-1.0.0-win-x64.zip
+e559ab9f616776951d3e116ca51543471742fba6fe0c2d43063b4a007e098b5b  dist/TicketTool-1.0.0-win-x86.zip
