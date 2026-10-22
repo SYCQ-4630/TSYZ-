@@ -76,7 +76,8 @@ public sealed class XlsxRowAppender
         {
             File.Copy(filePath, tempPath, true);
             cancellationToken.ThrowIfCancellationRequested();
-            var result = await Task.Run(() => AppendToFile(tempPath, cells, headerRow, cancellationToken), cancellationToken).ConfigureAwait(false);
+            var lastRow = await HeaderReader.GetLastRowNumberAsync(tempPath, cancellationToken).ConfigureAwait(false);
+            var result = await Task.Run(() => AppendToFile(tempPath, cells, headerRow, lastRow, cancellationToken), cancellationToken).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
             File.Replace(tempPath, filePath, backupPath, true);
@@ -99,6 +100,7 @@ public sealed class XlsxRowAppender
         string tempPath,
         IReadOnlyList<XlsxCellValue> cells,
         int headerRow,
+        int lastRow,
         CancellationToken cancellationToken)
     {
         var sourcePath = tempPath + ".source.xlsx";
@@ -114,6 +116,8 @@ public sealed class XlsxRowAppender
             var targetWorksheet = GetFirstWorksheetPart(targetWorkbook);
 
             var columnStyles = new Dictionary<int, uint>();
+            var mergeProfile = XlsxFormatAccumulator.ReadMergeProfile(sourceWorksheet, headerRow, lastRow, cancellationToken);
+            var formatAccumulator = new XlsxFormatAccumulator(headerRow);
             var insertedRow = 0;
             using (var reader = OpenXmlReader.Create(sourceWorksheet))
             using (var writer = OpenXmlWriter.Create(targetWorksheet))
@@ -154,26 +158,48 @@ public sealed class XlsxRowAppender
                     if (reader.ElementType == typeof(SheetData))
                     {
                         writer.WriteStartElement(new SheetData());
-                        var copied = CopyRows(reader, writer, cancellationToken);
-                        insertedRow = copied.MaxRow + 1;
+                        var copied = CopyRows(reader, writer, formatAccumulator, cancellationToken);
+                        insertedRow = Math.Max(copied.MaxRow, lastRow) + 1;
+                        var rowFormat = formatAccumulator.Build();
 
-                        var styleSource = copied.LastRowFormat;
-                        if (headerRow > 0 && insertedRow - 1 <= headerRow)
-                        {
-                            styleSource = null;
-                        }
-                        else if (headerRow <= 0 && copied.RowCount <= 1)
-                        {
-                            styleSource = null;
-                        }
-
-                        writer.WriteElement(BuildRow(insertedRow, cells, styleSource, columnStyles));
+                        writer.WriteElement(BuildRow(insertedRow, cells, rowFormat, columnStyles, mergeProfile.Spans));
                         writer.WriteEndElement();
+                        continue;
                     }
-                    else
+
+                    if (reader.ElementType == typeof(AutoFilter))
                     {
-                        writer.WriteElement(reader.LoadCurrentElement() ?? throw new XlsxStructureException("工作表结构异常。"));
+                        var autoFilter = reader.LoadCurrentElement() as AutoFilter;
+                        if (autoFilter is not null)
+                        {
+                            if (insertedRow > 0
+                                && XlsxRange.TryParse(autoFilter.Reference?.Value, out var filterRange)
+                                && filterRange.EndRow == insertedRow - 1)
+                            {
+                                autoFilter.Reference = new StringValue(filterRange.WithEndRow(insertedRow).ToString());
+                            }
+                            writer.WriteElement(autoFilter);
+                            continue;
+                        }
                     }
+
+                    if (reader.ElementType == typeof(MergeCells))
+                    {
+                        var mergeCells = reader.LoadCurrentElement() as MergeCells;
+                        if (mergeCells is null)
+                        {
+                            continue;
+                        }
+
+                        if (mergeProfile.Spans.Count > 0)
+                        {
+                            AppendMerges(mergeCells, insertedRow, mergeProfile.Spans);
+                        }
+                        writer.WriteElement(mergeCells);
+                        continue;
+                    }
+
+                    writer.WriteElement(reader.LoadCurrentElement() ?? throw new XlsxStructureException("工作表结构异常。"));
                 }
             }
 
@@ -191,19 +217,15 @@ public sealed class XlsxRowAppender
         }
     }
 
-    private sealed record RowFormat(
-        uint? RowStyleIndex,
-        double? Height,
-        bool CustomHeight,
-        Dictionary<int, uint> CellStyles);
+    private sealed record RowCopyResult(int MaxRow);
 
-    private sealed record RowCopyResult(int MaxRow, int RowCount, RowFormat? LastRowFormat);
-
-    private static RowCopyResult CopyRows(OpenXmlReader reader, OpenXmlWriter writer, CancellationToken cancellationToken)
+    private static RowCopyResult CopyRows(
+        OpenXmlReader reader,
+        OpenXmlWriter writer,
+        XlsxFormatAccumulator formatAccumulator,
+        CancellationToken cancellationToken)
     {
         var maxRow = 0;
-        var rowCount = 0;
-        RowFormat? lastRowFormat = null;
 
         while (reader.Read())
         {
@@ -221,30 +243,11 @@ public sealed class XlsxRowAppender
             var row = reader.LoadCurrentElement() as Row ?? throw new XlsxStructureException("数据行结构异常。");
             var rowIndex = row.RowIndex?.Value ?? (uint)(maxRow + 1);
             maxRow = Math.Max(maxRow, (int)rowIndex);
-            rowCount++;
-
-            var cellStyles = new Dictionary<int, uint>();
-            var fallbackColumn = 0;
-            foreach (var cell in row.Elements<Cell>())
-            {
-                var column = HeaderReader.ParseColumnIndex(cell.CellReference?.Value) ?? fallbackColumn;
-                fallbackColumn = column + 1;
-                if (cell.StyleIndex?.Value is uint styleIndex)
-                {
-                    cellStyles[column] = styleIndex;
-                }
-            }
-
-            lastRowFormat = new RowFormat(
-                row.StyleIndex?.Value,
-                row.Height?.Value,
-                row.CustomHeight?.Value ?? false,
-                cellStyles);
-
+            formatAccumulator.Add(row, (int)rowIndex);
             writer.WriteElement(row);
         }
 
-        return new RowCopyResult(maxRow, rowCount, lastRowFormat);
+        return new RowCopyResult(maxRow);
     }
 
     private static void CollectColumnStyles(Columns columns, Dictionary<int, uint> columnStyles)
@@ -273,8 +276,9 @@ public sealed class XlsxRowAppender
     private static Row BuildRow(
         int rowNumber,
         IReadOnlyList<XlsxCellValue> cells,
-        RowFormat? format,
-        IReadOnlyDictionary<int, uint> columnStyles)
+        XlsxRowFormat? format,
+        IReadOnlyDictionary<int, uint> columnStyles,
+        IReadOnlyList<ColumnMerge> merges)
     {
         var row = new Row { RowIndex = (uint)rowNumber };
         if (format?.RowStyleIndex is uint rowStyle)
@@ -288,26 +292,46 @@ public sealed class XlsxRowAppender
         }
 
         var values = cells.ToDictionary(c => c.ColumnIndex, c => c.Value);
+        var mergedStyles = ApplyMergedValues(values, format, columnStyles, merges);
+
         var columns = new HashSet<int>(values.Keys);
         if (format is not null)
         {
-            foreach (var column in format.CellStyles.Keys)
+            columns.UnionWith(format.CellStyles.Keys);
+        }
+
+        var mergeAnchors = new HashSet<int>();
+        foreach (var merge in merges)
+        {
+            if (merge.EndColumn <= merge.StartColumn)
             {
-                columns.Add(column);
+                continue;
+            }
+
+            mergeAnchors.Add(merge.StartColumn);
+            for (var column = merge.StartColumn + 1; column <= merge.EndColumn; column++)
+            {
+                columns.Remove(column);
             }
         }
+        columns.UnionWith(mergedStyles.Keys);
+        columns.UnionWith(mergeAnchors);
 
         foreach (var column in columns.OrderBy(c => c))
         {
             uint? style = null;
-            if (format is not null && format.CellStyles.TryGetValue(column, out var sourceStyle))
+            if (mergedStyles.TryGetValue(column, out var mergedStyle))
+            {
+                style = mergedStyle;
+            }
+            else if (format is not null && format.CellStyles.TryGetValue(column, out var sourceStyle))
             {
                 style = sourceStyle;
             }
             style ??= columnStyles.TryGetValue(column, out var columnStyle) ? columnStyle : null;
 
             var hasValue = values.TryGetValue(column, out var value) && !string.IsNullOrEmpty(value);
-            if (!hasValue && style is null)
+            if (!hasValue && style is null && !mergeAnchors.Contains(column))
             {
                 continue;
             }
@@ -331,6 +355,82 @@ public sealed class XlsxRowAppender
         return row;
     }
 
+    private static Dictionary<int, uint> ApplyMergedValues(
+        Dictionary<int, string?> values,
+        XlsxRowFormat? format,
+        IReadOnlyDictionary<int, uint> columnStyles,
+        IReadOnlyList<ColumnMerge> merges)
+    {
+        var mergedStyles = new Dictionary<int, uint>();
+        foreach (var merge in merges)
+        {
+            if (merge.EndColumn <= merge.StartColumn)
+            {
+                continue;
+            }
+
+            if (!HasText(values, merge.StartColumn))
+            {
+                for (var column = merge.StartColumn + 1; column <= merge.EndColumn; column++)
+                {
+                    if (HasText(values, column))
+                    {
+                        values[merge.StartColumn] = values[column];
+                        break;
+                    }
+                }
+            }
+
+            for (var column = merge.StartColumn + 1; column <= merge.EndColumn; column++)
+            {
+                values.Remove(column);
+            }
+
+            uint? style = null;
+            if (format is not null)
+            {
+                style = FirstStyle(format.CellStyles, merge);
+            }
+            style ??= FirstStyle(columnStyles, merge);
+            if (style is uint mergedStyle)
+            {
+                mergedStyles[merge.StartColumn] = mergedStyle;
+            }
+        }
+        return mergedStyles;
+    }
+
+    private static bool HasText(IReadOnlyDictionary<int, string?> values, int column)
+        => values.TryGetValue(column, out var value) && !string.IsNullOrEmpty(value);
+
+    private static uint? FirstStyle(IReadOnlyDictionary<int, uint> styles, ColumnMerge merge)
+    {
+        for (var column = merge.StartColumn; column <= merge.EndColumn; column++)
+        {
+            if (styles.TryGetValue(column, out var style))
+            {
+                return style;
+            }
+        }
+        return null;
+    }
+
+    private static void AppendMerges(MergeCells mergeCells, int rowNumber, IReadOnlyList<ColumnMerge> spans)
+    {
+        foreach (var span in spans)
+        {
+            if (span.EndColumn <= span.StartColumn)
+            {
+                continue;
+            }
+
+            var start = $"{HeaderReader.GetColumnName(span.StartColumn)}{rowNumber}";
+            var end = $"{HeaderReader.GetColumnName(span.EndColumn)}{rowNumber}";
+            mergeCells.Append(new MergeCell { Reference = new StringValue($"{start}:{end}") });
+        }
+        mergeCells.Count = (uint)mergeCells.ChildElements.Count;
+    }
+
     private static void ExpandTableRanges(WorkbookPart workbookPart, int insertedRow)
     {
         var worksheetPart = GetFirstWorksheetPart(workbookPart);
@@ -347,84 +447,24 @@ public sealed class XlsxRowAppender
                 continue;
             }
 
-            if (!TryParseRange(table.Reference?.Value, out var startRow, out var endRow, out var startColumn, out var endColumn))
+            if (!XlsxRange.TryParse(table.Reference?.Value, out var range)
+                || range.EndRow != insertedRow - 1)
             {
                 continue;
             }
 
-            if (endRow != insertedRow - 1)
-            {
-                continue;
-            }
-
-            table.Reference = new StringValue(
-                $"{HeaderReader.GetColumnName(startColumn)}{startRow}:{HeaderReader.GetColumnName(endColumn)}{insertedRow}");
+            table.Reference = new StringValue(range.WithEndRow(insertedRow).ToString());
 
             var autoFilter = table.GetFirstChild<AutoFilter>();
             if (autoFilter is not null
-                && TryParseRange(autoFilter.Reference?.Value, out var filterStartRow, out var filterEndRow, out var filterStartColumn, out var filterEndColumn)
-                && filterEndRow == endRow)
+                && XlsxRange.TryParse(autoFilter.Reference?.Value, out var filterRange)
+                && filterRange.EndRow == range.EndRow)
             {
-                autoFilter.Reference = new StringValue(
-                    $"{HeaderReader.GetColumnName(filterStartColumn)}{filterStartRow}:{HeaderReader.GetColumnName(filterEndColumn)}{insertedRow}");
+                autoFilter.Reference = new StringValue(filterRange.WithEndRow(insertedRow).ToString());
             }
 
             table.Save();
         }
-    }
-
-    private static bool TryParseRange(string? reference, out int startRow, out int endRow, out int startColumn, out int endColumn)
-    {
-        startRow = 0;
-        endRow = 0;
-        startColumn = 0;
-        endColumn = 0;
-        if (string.IsNullOrWhiteSpace(reference))
-        {
-            return false;
-        }
-
-        var parts = reference.Split(':');
-        if (parts.Length != 2)
-        {
-            return false;
-        }
-
-        if (!TryParseCell(parts[0], out startRow, out startColumn)
-            || !TryParseCell(parts[1], out endRow, out endColumn))
-        {
-            return false;
-        }
-
-        return startRow > 0 && endRow >= startRow && endColumn >= startColumn;
-    }
-
-    private static bool TryParseCell(string text, out int row, out int column)
-    {
-        row = 0;
-        column = 0;
-        var value = text.Replace("$", string.Empty, StringComparison.Ordinal).Trim();
-        var index = 0;
-        var columnNumber = 0;
-        while (index < value.Length && char.IsLetter(value[index]))
-        {
-            columnNumber = columnNumber * 26 + (char.ToUpperInvariant(value[index]) - 'A' + 1);
-            index++;
-        }
-
-        if (columnNumber == 0 || index >= value.Length)
-        {
-            return false;
-        }
-
-        if (!int.TryParse(value[index..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out row)
-            || row <= 0)
-        {
-            return false;
-        }
-
-        column = columnNumber - 1;
-        return true;
     }
 
     private static WorksheetPart GetFirstWorksheetPart(WorkbookPart workbookPart)
