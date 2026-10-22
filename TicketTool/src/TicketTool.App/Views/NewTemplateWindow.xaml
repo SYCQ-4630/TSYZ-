@@ -1,0 +1,70 @@
+<Window x:Class="TicketTool.App.Views.NewTemplateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding WindowTitle}"
+        Width="760"
+        Height="640"
+        MinWidth="680"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource Card}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="90"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="模板名称" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MaxLength="80"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="目标表格" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,0,0"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding FilePath}" IsReadOnly="True" Margin="0,10,0,0" ToolTip="模板绑定的 Excel 工作簿路径"/>
+                <Button Grid.Row="1" Grid.Column="2" Content="浏览…" Command="{Binding BrowseCommand}" Style="{StaticResource BaseButton}" Margin="8,10,0,0"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="表头行号" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,0,0"/>
+                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBox Width="70" Text="{Binding HeaderRow, UpdateSourceTrigger=LostFocus}" HorizontalContentAlignment="Center"/>
+                    <Button Content="检测表头" Command="{Binding DetectCommand}" Style="{StaticResource BaseButton}" Margin="10,0,0,0"/>
+                    <TextBlock Text="{Binding HeaderSummary}" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="1" Text="字段映射（默认按表头名称生成，可双击修改）" FontWeight="SemiBold" Margin="2,14,0,6"/>
+        <DataGrid Grid.Row="2"
+                  ItemsSource="{Binding Fields}"
+                  IsReadOnly="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  SelectionUnit="Cell">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="列" Binding="{Binding ColumnName}" IsReadOnly="True" Width="70"/>
+                <DataGridTextColumn Header="字段名称" Binding="{Binding FieldName, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                <DataGridTextColumn Header="检索类型" Binding="{Binding CoreTypeText}" IsReadOnly="True" Width="130"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <TextBlock Text="保存后会自动为字段生成默认识别规则，可稍后在“编辑规则”中调整。" Style="{StaticResource Muted}" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="保存" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" MinWidth="100"/>
+                <Button Content="取消" Command="{Binding CancelCommand}" Style="{StaticResource BaseButton}" Margin="0"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
