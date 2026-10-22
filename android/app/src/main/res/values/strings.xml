@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">自动记账</string>
+    <string name="accessibility_label">自动记账 · 支付结果抓取</string>
+    <string name="accessibility_summary">识别微信、支付宝、云闪付和银行 App 的支付结果文本</string>
+    <string name="accessibility_description">仅读取目标支付与银行应用的界面文本，用于本地生成流水；不申请网络权限，数据不会上传。可以随时在系统设置中关闭。</string>
+    <string name="notification_listener_label">自动记账 · 通知补充</string>
+</resources>
