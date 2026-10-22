@@ -5,6 +5,12 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>TicketTool.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyTitle>通信工单助手</AssemblyTitle>
+    <Product>通信工单助手</Product>
+    <Description>按自定义规则从工单文本抽取字段并持续写入 Excel 的桌面工具</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
@@ -14,6 +20,6 @@
     <ProjectReference Include="..\TicketTool.Core\TicketTool.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\samples\**\*" Link="samples\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\samples\**\*" Link="samples\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -18,7 +18,8 @@
 ## 运行环境
 
 - Windows 10 1809 及以上，或 Windows 11。
-- .NET 8 Desktop Runtime（若使用框架依赖发布）。
+- x64 发布包适用于 64 位 Windows 10/11；x86 发布包适用于 32 位 Windows 10，也可在 64 位系统上通过 WoW64 运行。
+- 发布包为自包含单文件，无需安装 .NET 运行时。
 - 目标表格为 `.xlsx`，第一个工作表，首行为表头。
 
 ## 构建
@@ -30,9 +31,12 @@ dotnet build TicketTool.sln -c Release
 # 运行测试
 dotnet test tests/TicketTool.Tests/TicketTool.Tests.csproj
 
-# 发布 Windows 版本（需要 Windows 或带 EnableWindowsTargeting 的环境）
-dotnet publish src/TicketTool.App/TicketTool.App.csproj -c Release -r win-x64 --self-contained false
+# 发布自包含 Windows 版本（x64 / x86）
+dotnet publish src/TicketTool.App/TicketTool.App.csproj -p:PublishProfile=win-x64
+dotnet publish src/TicketTool.App/TicketTool.App.csproj -p:PublishProfile=win-x86
 ```
+
+发布结果位于 `artifacts/publish/win-x64/` 与 `artifacts/publish/win-x86/`，每个目录内是可直接运行的单文件程序及 `samples` 示例目录。
 
 非 Windows 环境构建 WPF 时，项目已通过 `Directory.Build.props` 打开 `EnableWindowsTargeting`；产物只能在 Windows 上运行。
 
