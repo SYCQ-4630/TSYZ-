@@ -16,6 +16,8 @@ public sealed class NormalizerTests
     {
         Assert.Equal("13812345678", TextNormalizer.NormalizePhone("１３８-１２３４ ５６７８"));
         Assert.Equal("057188881111", TextNormalizer.NormalizePhone("0571-8888 1111"));
+        Assert.Equal("13812345678", TextNormalizer.NormalizePhone("+86 138-1234-5678"));
+        Assert.Equal("13812345678", TextNormalizer.NormalizePhone("0086 13812345678"));
     }
 
     [Fact]

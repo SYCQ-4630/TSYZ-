@@ -58,8 +58,21 @@ public static class TextNormalizer
 
             builder.Append(ch);
         }
-        return builder.ToString();
+
+        var cleaned = builder.ToString();
+        if (cleaned.Length == 15 && cleaned.StartsWith("0086", StringComparison.Ordinal) && IsMobile(cleaned[4..]))
+        {
+            return cleaned[4..];
+        }
+        if (cleaned.Length == 13 && cleaned.StartsWith("86", StringComparison.Ordinal) && IsMobile(cleaned[2..]))
+        {
+            return cleaned[2..];
+        }
+        return cleaned;
     }
+
+    private static bool IsMobile(string value)
+        => value.Length == 11 && value[0] == '1' && value[1] is >= '3' and <= '9';
 
     /// <summary>投诉地址：全半角归一、去首尾空格，保留内部标点。</summary>
     public static string NormalizeAddress(string? value)
