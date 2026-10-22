@@ -53,7 +53,8 @@ public sealed class XlsxRowAppender
     public async Task<XlsxAppendResult> AppendRowAsync(
         string filePath,
         IReadOnlyList<XlsxCellValue> cells,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int headerRow = 0)
     {
         if (!File.Exists(filePath))
         {
@@ -75,7 +76,7 @@ public sealed class XlsxRowAppender
         {
             File.Copy(filePath, tempPath, true);
             cancellationToken.ThrowIfCancellationRequested();
-            var result = await Task.Run(() => AppendToFile(tempPath, cells, cancellationToken), cancellationToken).ConfigureAwait(false);
+            var result = await Task.Run(() => AppendToFile(tempPath, cells, headerRow, cancellationToken), cancellationToken).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
             File.Replace(tempPath, filePath, backupPath, true);
@@ -94,7 +95,11 @@ public sealed class XlsxRowAppender
         }
     }
 
-    private XlsxAppendResult AppendToFile(string tempPath, IReadOnlyList<XlsxCellValue> cells, CancellationToken cancellationToken)
+    private XlsxAppendResult AppendToFile(
+        string tempPath,
+        IReadOnlyList<XlsxCellValue> cells,
+        int headerRow,
+        CancellationToken cancellationToken)
     {
         var sourcePath = tempPath + ".source.xlsx";
         File.Copy(tempPath, sourcePath, true);
@@ -108,6 +113,7 @@ public sealed class XlsxRowAppender
             var targetWorkbook = targetDocument.WorkbookPart ?? throw new XlsxStructureException("表格缺少工作簿结构。");
             var targetWorksheet = GetFirstWorksheetPart(targetWorkbook);
 
+            var columnStyles = new Dictionary<int, uint>();
             var insertedRow = 0;
             using (var reader = OpenXmlReader.Create(sourceWorksheet))
             using (var writer = OpenXmlWriter.Create(targetWorksheet))
@@ -134,12 +140,34 @@ public sealed class XlsxRowAppender
                         continue;
                     }
 
+                    if (reader.ElementType == typeof(Columns))
+                    {
+                        var columns = reader.LoadCurrentElement() as Columns;
+                        if (columns is not null)
+                        {
+                            CollectColumnStyles(columns, columnStyles);
+                            writer.WriteElement(columns);
+                        }
+                        continue;
+                    }
+
                     if (reader.ElementType == typeof(SheetData))
                     {
                         writer.WriteStartElement(new SheetData());
-                        var maxRow = CopyRows(reader, writer, cancellationToken);
-                        insertedRow = maxRow + 1;
-                        writer.WriteElement(BuildRow(insertedRow, cells));
+                        var copied = CopyRows(reader, writer, cancellationToken);
+                        insertedRow = copied.MaxRow + 1;
+
+                        var styleSource = copied.LastRowFormat;
+                        if (headerRow > 0 && insertedRow - 1 <= headerRow)
+                        {
+                            styleSource = null;
+                        }
+                        else if (headerRow <= 0 && copied.RowCount <= 1)
+                        {
+                            styleSource = null;
+                        }
+
+                        writer.WriteElement(BuildRow(insertedRow, cells, styleSource, columnStyles));
                         writer.WriteEndElement();
                     }
                     else
@@ -148,6 +176,8 @@ public sealed class XlsxRowAppender
                     }
                 }
             }
+
+            ExpandTableRanges(targetWorkbook, insertedRow);
 
             return new XlsxAppendResult
             {
@@ -161,9 +191,20 @@ public sealed class XlsxRowAppender
         }
     }
 
-    private static int CopyRows(OpenXmlReader reader, OpenXmlWriter writer, CancellationToken cancellationToken)
+    private sealed record RowFormat(
+        uint? RowStyleIndex,
+        double? Height,
+        bool CustomHeight,
+        Dictionary<int, uint> CellStyles);
+
+    private sealed record RowCopyResult(int MaxRow, int RowCount, RowFormat? LastRowFormat);
+
+    private static RowCopyResult CopyRows(OpenXmlReader reader, OpenXmlWriter writer, CancellationToken cancellationToken)
     {
         var maxRow = 0;
+        var rowCount = 0;
+        RowFormat? lastRowFormat = null;
+
         while (reader.Read())
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -180,30 +221,210 @@ public sealed class XlsxRowAppender
             var row = reader.LoadCurrentElement() as Row ?? throw new XlsxStructureException("数据行结构异常。");
             var rowIndex = row.RowIndex?.Value ?? (uint)(maxRow + 1);
             maxRow = Math.Max(maxRow, (int)rowIndex);
+            rowCount++;
+
+            var cellStyles = new Dictionary<int, uint>();
+            var fallbackColumn = 0;
+            foreach (var cell in row.Elements<Cell>())
+            {
+                var column = HeaderReader.ParseColumnIndex(cell.CellReference?.Value) ?? fallbackColumn;
+                fallbackColumn = column + 1;
+                if (cell.StyleIndex?.Value is uint styleIndex)
+                {
+                    cellStyles[column] = styleIndex;
+                }
+            }
+
+            lastRowFormat = new RowFormat(
+                row.StyleIndex?.Value,
+                row.Height?.Value,
+                row.CustomHeight?.Value ?? false,
+                cellStyles);
+
             writer.WriteElement(row);
         }
-        return maxRow;
+
+        return new RowCopyResult(maxRow, rowCount, lastRowFormat);
     }
 
-    private static Row BuildRow(int rowNumber, IReadOnlyList<XlsxCellValue> cells)
+    private static void CollectColumnStyles(Columns columns, Dictionary<int, uint> columnStyles)
     {
-        var row = new Row { RowIndex = (uint)rowNumber };
-        foreach (var cellValue in cells.OrderBy(c => c.ColumnIndex))
+        foreach (var column in columns.Elements<Column>())
         {
-            if (string.IsNullOrEmpty(cellValue.Value))
+            if (column.Style?.Value is not uint style)
             {
                 continue;
             }
 
-            var text = new Text(cellValue.Value) { Space = SpaceProcessingModeValues.Preserve };
-            row.Append(new Cell
+            var min = (int)(column.Min?.Value ?? 0);
+            var max = (int)(column.Max?.Value ?? (uint)min);
+            if (min <= 0 || max < min)
             {
-                CellReference = HeaderReader.GetColumnName(cellValue.ColumnIndex) + rowNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                DataType = CellValues.InlineString,
-                InlineString = new InlineString(text)
-            });
+                continue;
+            }
+
+            for (var index = min; index <= max && index - min < 16384; index++)
+            {
+                columnStyles[index - 1] = style;
+            }
         }
+    }
+
+    private static Row BuildRow(
+        int rowNumber,
+        IReadOnlyList<XlsxCellValue> cells,
+        RowFormat? format,
+        IReadOnlyDictionary<int, uint> columnStyles)
+    {
+        var row = new Row { RowIndex = (uint)rowNumber };
+        if (format?.RowStyleIndex is uint rowStyle)
+        {
+            row.StyleIndex = rowStyle;
+        }
+        if (format?.Height is double height)
+        {
+            row.Height = height;
+            row.CustomHeight = true;
+        }
+
+        var values = cells.ToDictionary(c => c.ColumnIndex, c => c.Value);
+        var columns = new HashSet<int>(values.Keys);
+        if (format is not null)
+        {
+            foreach (var column in format.CellStyles.Keys)
+            {
+                columns.Add(column);
+            }
+        }
+
+        foreach (var column in columns.OrderBy(c => c))
+        {
+            uint? style = null;
+            if (format is not null && format.CellStyles.TryGetValue(column, out var sourceStyle))
+            {
+                style = sourceStyle;
+            }
+            style ??= columnStyles.TryGetValue(column, out var columnStyle) ? columnStyle : null;
+
+            var hasValue = values.TryGetValue(column, out var value) && !string.IsNullOrEmpty(value);
+            if (!hasValue && style is null)
+            {
+                continue;
+            }
+
+            var cell = new Cell
+            {
+                CellReference = HeaderReader.GetColumnName(column) + rowNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            };
+            if (style is uint cellStyle)
+            {
+                cell.StyleIndex = cellStyle;
+            }
+            if (hasValue)
+            {
+                cell.DataType = CellValues.InlineString;
+                cell.InlineString = new InlineString(new Text(value!) { Space = SpaceProcessingModeValues.Preserve });
+            }
+            row.Append(cell);
+        }
+
         return row;
+    }
+
+    private static void ExpandTableRanges(WorkbookPart workbookPart, int insertedRow)
+    {
+        var worksheetPart = GetFirstWorksheetPart(workbookPart);
+        foreach (var tablePart in worksheetPart.TableDefinitionParts)
+        {
+            var table = tablePart.Table;
+            if (table is null)
+            {
+                continue;
+            }
+
+            if ((table.TotalsRowCount?.Value ?? 0) > 0 || table.TotalsRowShown?.Value == true)
+            {
+                continue;
+            }
+
+            if (!TryParseRange(table.Reference?.Value, out var startRow, out var endRow, out var startColumn, out var endColumn))
+            {
+                continue;
+            }
+
+            if (endRow != insertedRow - 1)
+            {
+                continue;
+            }
+
+            table.Reference = new StringValue(
+                $"{HeaderReader.GetColumnName(startColumn)}{startRow}:{HeaderReader.GetColumnName(endColumn)}{insertedRow}");
+
+            var autoFilter = table.GetFirstChild<AutoFilter>();
+            if (autoFilter is not null
+                && TryParseRange(autoFilter.Reference?.Value, out var filterStartRow, out var filterEndRow, out var filterStartColumn, out var filterEndColumn)
+                && filterEndRow == endRow)
+            {
+                autoFilter.Reference = new StringValue(
+                    $"{HeaderReader.GetColumnName(filterStartColumn)}{filterStartRow}:{HeaderReader.GetColumnName(filterEndColumn)}{insertedRow}");
+            }
+
+            table.Save();
+        }
+    }
+
+    private static bool TryParseRange(string? reference, out int startRow, out int endRow, out int startColumn, out int endColumn)
+    {
+        startRow = 0;
+        endRow = 0;
+        startColumn = 0;
+        endColumn = 0;
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return false;
+        }
+
+        var parts = reference.Split(':');
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        if (!TryParseCell(parts[0], out startRow, out startColumn)
+            || !TryParseCell(parts[1], out endRow, out endColumn))
+        {
+            return false;
+        }
+
+        return startRow > 0 && endRow >= startRow && endColumn >= startColumn;
+    }
+
+    private static bool TryParseCell(string text, out int row, out int column)
+    {
+        row = 0;
+        column = 0;
+        var value = text.Replace("$", string.Empty, StringComparison.Ordinal).Trim();
+        var index = 0;
+        var columnNumber = 0;
+        while (index < value.Length && char.IsLetter(value[index]))
+        {
+            columnNumber = columnNumber * 26 + (char.ToUpperInvariant(value[index]) - 'A' + 1);
+            index++;
+        }
+
+        if (columnNumber == 0 || index >= value.Length)
+        {
+            return false;
+        }
+
+        if (!int.TryParse(value[index..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out row)
+            || row <= 0)
+        {
+            return false;
+        }
+
+        column = columnNumber - 1;
+        return true;
     }
 
     private static WorksheetPart GetFirstWorksheetPart(WorkbookPart workbookPart)

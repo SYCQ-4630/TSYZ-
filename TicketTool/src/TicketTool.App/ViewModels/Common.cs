@@ -16,6 +16,10 @@ public sealed class FieldPreviewRow : INotifyPropertyChanged
     {
     }
 
+    private string _note = string.Empty;
+    private bool _isSimilarMatched;
+    private bool _isSuperseded;
+
     public FieldPreviewRow(ParsedField? parsed, TemplateField field)
     {
         FieldId = field.Id;
@@ -38,13 +42,55 @@ public sealed class FieldPreviewRow : INotifyPropertyChanged
 
     public int EndOffset { get; set; }
 
-    public bool IsMissing { get; init; }
+    public bool IsMissing { get; private set; }
 
-    public bool IsValid { get; init; }
+    public bool IsValid { get; private set; }
 
-    public bool HasConflict { get; init; }
+    public bool HasConflict { get; private set; }
 
-    public string Note { get; init; } = string.Empty;
+    public string Note
+    {
+        get => _note;
+        private set
+        {
+            if (_note == value)
+            {
+                return;
+            }
+            _note = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool IsSimilarMatched
+    {
+        get => _isSimilarMatched;
+        private set
+        {
+            if (_isSimilarMatched == value)
+            {
+                return;
+            }
+            _isSimilarMatched = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusText));
+        }
+    }
+
+    public bool IsSuperseded
+    {
+        get => _isSuperseded;
+        private set
+        {
+            if (_isSuperseded == value)
+            {
+                return;
+            }
+            _isSuperseded = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusText));
+        }
+    }
 
     public string OriginalValue { get; init; } = string.Empty;
 
@@ -66,7 +112,50 @@ public sealed class FieldPreviewRow : INotifyPropertyChanged
 
     public bool IsModified => !string.Equals(Value, OriginalValue, StringComparison.Ordinal);
 
-    public string StatusText => IsMissing ? "未识别" : !IsValid ? "格式待确认" : HasConflict ? "多规则命中" : IsModified ? "已手动修正" : "已识别";
+    public string StatusText => IsSuperseded
+        ? "已转移"
+        : IsSimilarMatched
+            ? "相似字段确认"
+            : IsMissing
+                ? "未识别"
+                : !IsValid
+                    ? "格式待确认"
+                    : HasConflict
+                        ? "多规则命中"
+                        : IsModified
+                            ? "已手动修正"
+                            : "已识别";
+
+    /// <summary>按相似字段选择写入值，并保留原文偏移。</summary>
+    public void ApplySimilarMatch(string sourceLabel, string value, int startOffset, int endOffset)
+    {
+        IsMissing = false;
+        IsValid = true;
+        HasConflict = false;
+        IsSuperseded = false;
+        IsSimilarMatched = true;
+        StartOffset = startOffset;
+        EndOffset = endOffset;
+        Note = $"由相似字段“{sourceLabel}”确认填入";
+        Value = value;
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(IsMissing));
+        OnPropertyChanged(nameof(IsValid));
+    }
+
+    /// <summary>该字段的候选值已被用户选择写入其他列。</summary>
+    public void ClearForSimilarMatch(string targetFieldName)
+    {
+        IsSuperseded = true;
+        IsSimilarMatched = false;
+        IsMissing = true;
+        StartOffset = 0;
+        EndOffset = 0;
+        Note = $"已按相似字段选择写入“{targetFieldName}”列。";
+        Value = string.Empty;
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(IsMissing));
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

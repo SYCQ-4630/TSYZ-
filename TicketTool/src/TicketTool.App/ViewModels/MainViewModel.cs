@@ -45,6 +45,7 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _suppressAutoParse;
     private bool _exiting;
     private long? _loadingSelectionId;
+    private readonly HashSet<string> _similarPromptKeys = new(StringComparer.Ordinal);
 
     [ObservableProperty]
     private string _rawText = string.Empty;
@@ -275,7 +276,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>按当前模板解析原文。</summary>
     [RelayCommand(CanExecute = nameof(CanParse))]
-    private async Task ParseAsync()
+    private Task ParseAsync() => ParseCoreAsync(showSimilarPrompt: true);
+
+    private async Task ParseCoreAsync(bool showSimilarPrompt)
     {
         var template = SelectedTemplate;
         if (template is null)
@@ -317,13 +320,24 @@ public sealed partial class MainViewModel : ObservableObject
                 MissingFields.Add(missing);
             }
 
+            var similarApplied = false;
+            if (showSimilarPrompt)
+            {
+                similarApplied = await PromptSimilarFieldsAsync(text, template, result, token).ConfigureAwait(true);
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
+            }
+
             OnPropertyChanged(nameof(HasMissingFields));
             OnPropertyChanged(nameof(ParsedCountText));
             ConfirmImportCommand.NotifyCanExecuteChanged();
             var recognized = PreviewFields.Count(f => !f.IsMissing);
-            StatusMessage = recognized == PreviewFields.Count
+            var summary = recognized == PreviewFields.Count
                 ? $"识别完成：{recognized} 个字段全部找到，请核对后确认导入。"
                 : $"识别完成：{recognized} / {PreviewFields.Count} 个字段，未识别项已高亮，请手动补充。";
+            StatusMessage = similarApplied ? summary + " 已按相似字段选择更新预览。" : summary;
             ParseProgressValue = 100;
             ParseProgressText = $"识别完成，耗时 {result.Elapsed.TotalMilliseconds:0} 毫秒";
             await SaveSnapshotAsync().ConfigureAwait(true);
@@ -341,6 +355,125 @@ public sealed partial class MainViewModel : ObservableObject
         {
             IsParsing = false;
         }
+    }
+
+    private async Task<bool> PromptSimilarFieldsAsync(
+        string text,
+        Template template,
+        TicketParseResult result,
+        CancellationToken token)
+    {
+        var matches = await Task.Run(
+            () => SimilarFieldDetector.Detect(text, template, result),
+            token).ConfigureAwait(true);
+        if (token.IsCancellationRequested || matches.Count == 0)
+        {
+            return false;
+        }
+
+        var relevant = matches
+            .Where(match => match.Candidates.Any(candidate =>
+            {
+                var row = PreviewFields.FirstOrDefault(field => field.FieldId == candidate.FieldId);
+                return row is null || row.IsMissing || !string.Equals(row.Value, match.SourceValue, StringComparison.Ordinal);
+            }))
+            .ToList();
+        if (relevant.Count == 0)
+        {
+            return false;
+        }
+
+        var key = BuildSimilarPromptKey(template, text);
+        if (!_similarPromptKeys.Add(key))
+        {
+            return false;
+        }
+        if (_similarPromptKeys.Count > 64)
+        {
+            _similarPromptKeys.Clear();
+            _similarPromptKeys.Add(key);
+        }
+
+        var selections = _windows.ShowSimilarFields(relevant);
+        if (selections is null)
+        {
+            _similarPromptKeys.Remove(key);
+            return false;
+        }
+
+        if (selections.Count == 0)
+        {
+            return false;
+        }
+
+        ApplySimilarSelections(selections);
+        return true;
+    }
+
+    private static string BuildSimilarPromptKey(Template template, string text)
+    {
+        var hash = 17;
+        foreach (var ch in text)
+        {
+            hash = unchecked(hash * 31 + ch);
+        }
+        return $"{template.Id}:{template.UpdatedAt.UtcTicks}:{text.Length}:{hash}";
+    }
+
+    private void ApplySimilarSelections(IReadOnlyList<SimilarFieldSelection> selections)
+    {
+        foreach (var selection in selections)
+        {
+            if (selection.TargetFieldId is null)
+            {
+                continue;
+            }
+
+            var target = PreviewFields.FirstOrDefault(field => field.FieldId == selection.TargetFieldId);
+            if (target is null)
+            {
+                continue;
+            }
+
+            foreach (var row in PreviewFields)
+            {
+                if (row == target || row.IsModified)
+                {
+                    continue;
+                }
+
+                var wasCandidate = selection.Match.Candidates.Any(candidate => candidate.FieldId == row.FieldId);
+                if (!wasCandidate)
+                {
+                    continue;
+                }
+
+                var sameSource = row.StartOffset == selection.Match.ValueStart
+                                 && row.EndOffset == selection.Match.ValueEnd;
+                var sameValue = !string.IsNullOrEmpty(row.Value)
+                                && string.Equals(row.Value, selection.Match.SourceValue, StringComparison.Ordinal);
+                if (sameSource || sameValue)
+                {
+                    row.ClearForSimilarMatch(target.FieldName);
+                }
+            }
+
+            target.ApplySimilarMatch(
+                selection.Match.SourceLabel,
+                selection.Match.SourceValue,
+                selection.Match.ValueStart,
+                selection.Match.ValueEnd);
+        }
+
+        MissingFields.Clear();
+        foreach (var row in PreviewFields.Where(field => field.IsMissing))
+        {
+            MissingFields.Add(row.FieldName);
+        }
+
+        OnPropertyChanged(nameof(HasMissingFields));
+        OnPropertyChanged(nameof(ParsedCountText));
+        ConfirmImportCommand.NotifyCanExecuteChanged();
     }
 
     private bool CanConfirmImport => SelectedTemplate is not null && PreviewFields.Count > 0 && !IsImporting && !IsParsing;
@@ -970,7 +1103,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (SelectedTemplate is not null && !string.IsNullOrWhiteSpace(RawText))
         {
-            await ParseAsync().ConfigureAwait(true);
+            await ParseCoreAsync(showSimilarPrompt: false).ConfigureAwait(true);
             if (snapshot.PreviewValues.Count > 0)
             {
                 foreach (var row in PreviewFields)
@@ -1099,7 +1232,7 @@ public sealed partial class MainViewModel : ObservableObject
                 continue;
             }
 
-            if (!row.IsModified && row.EndOffset > row.StartOffset && row.EndOffset <= RawText.Length
+            if ((!row.IsModified || row.IsSimilarMatched) && row.EndOffset > row.StartOffset && row.EndOffset <= RawText.Length
                 && RawText[row.StartOffset..row.EndOffset] == row.Value)
             {
                 spans.Add(new FieldSpan { FieldName = row.FieldName, StartOffset = row.StartOffset, EndOffset = row.EndOffset });

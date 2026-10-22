@@ -12,6 +12,7 @@ public interface IWindowService
     Template? ShowTemplateEditor(Template? existing);
     bool ShowRuleEditor(Template template, string rawText);
     void ShowTrace(long ticketId, string fieldName, string displayValue);
+    IReadOnlyList<SimilarFieldSelection>? ShowSimilarFields(IReadOnlyList<SimilarFieldMatch> matches);
 }
 
 /// <summary>基于 DI 的窗口服务。</summary>
@@ -51,5 +52,14 @@ public sealed class WindowService : IWindowService
             Owner = Application.Current.MainWindow
         };
         window.ShowDialog();
+    }
+
+    public IReadOnlyList<SimilarFieldSelection>? ShowSimilarFields(IReadOnlyList<SimilarFieldMatch> matches)
+    {
+        var window = new SimilarFieldWindow(matches)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        return window.ShowDialog() == true ? window.Selections : null;
     }
 }

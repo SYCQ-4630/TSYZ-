@@ -180,7 +180,7 @@ public sealed class TicketSyncWorker : IAsyncDisposable
 
         try
         {
-            var result = await _appender.AppendRowAsync(template.FilePath, cells, cancellationToken).ConfigureAwait(false);
+            var result = await _appender.AppendRowAsync(template.FilePath, cells, cancellationToken, template.HeaderRow).ConfigureAwait(false);
             await _queue.MarkSyncedAsync(item.Id, cancellationToken).ConfigureAwait(false);
             _logger.Information(
                 "SyncSucceeded {TicketId} {QueueId} {TemplateId} {Row} {Retry}",
