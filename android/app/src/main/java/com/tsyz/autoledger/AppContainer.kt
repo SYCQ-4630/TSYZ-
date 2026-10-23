@@ -47,7 +47,7 @@ class AppContainer(val app: Application) {
     val db by lazy { DatabaseProvider.get(app) }
 
     val logger by lazy { SafeLogger(db.logDao(), appScope, sessionId) }
-    val health by lazy { HealthMonitor(db.healthDao(), logger, appScope) }
+    val health by lazy { HealthMonitor(app, settings, db.healthDao(), logger, appScope) }
     val rules by lazy { RuleRepository(app, db.ruleDao(), logger) }
     val pipeline by lazy {
         IngestionPipeline(db, rules, settings, logger, health)
@@ -93,13 +93,16 @@ class AppContainer(val app: Application) {
             runCatching {
                 health.beatNow(HealthChannel.APP, "process start")
                 rules.ensureSeeded()
-                health.checkStaleChannels()
                 val current = settings.current()
                 scheduler.apply(current)
+                if (current.monthlyReportEnabled) {
+                    health.beatNow(HealthChannel.WORKER, "scheduled")
+                }
                 maintenance.schedule()
                 if (current.foregroundServiceEnabled) {
                     ForegroundGuardService.start(app)
                 }
+                health.checkStaleChannels()
                 logger.info("APP", "进程启动 session=$sessionId restore=${decision.restoreCandidate != null}")
             }.onFailure {
                 Timber.e(it, "startup failed")

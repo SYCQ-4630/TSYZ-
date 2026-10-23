@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.tsyz.autoledger.AutoLedgerApp
 import com.tsyz.autoledger.core.util.TimeUtils
+import com.tsyz.autoledger.health.HealthChannel
 import java.time.YearMonth
 
 class MonthlyReportWorker(
@@ -27,6 +28,7 @@ class MonthlyReportWorker(
             settings.lastReportGeneratedAt >= currentMonthStart
         if (alreadyGenerated) {
             container.scheduler.scheduleNext()
+            container.health.beatNow(HealthChannel.WORKER, "already generated")
             return Result.success()
         }
 

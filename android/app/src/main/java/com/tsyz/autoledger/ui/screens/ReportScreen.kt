@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -28,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tsyz.autoledger.core.model.ChannelState
 import com.tsyz.autoledger.core.util.Money
 import com.tsyz.autoledger.core.util.TimeUtils
 import com.tsyz.autoledger.ui.ChartMode
@@ -190,7 +193,7 @@ fun ReportScreen(
             }
         }
         item {
-            SectionCard(title = "通道健康", subtitle = "心跳超期的通道不会静默失败，会在月报中提示") {
+            SectionCard(title = "通道健康", subtitle = "区分正常、待触发、未启用与心跳超期；只有超期会在月报中提醒") {
                 if (current.health.isEmpty()) {
                     EmptyState("暂无通道心跳")
                 } else {
@@ -199,20 +202,40 @@ fun ReportScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val state = line.state
                             Icon(
-                                imageVector = if (line.healthy) Icons.Filled.CheckCircle else Icons.Filled.Warning,
+                                imageVector = when (state) {
+                                    ChannelState.OK -> Icons.Filled.CheckCircle
+                                    ChannelState.IDLE -> Icons.Filled.Schedule
+                                    ChannelState.STALE -> Icons.Filled.Warning
+                                    ChannelState.DISABLED -> Icons.Filled.Block
+                                },
                                 contentDescription = null,
-                                tint = if (line.healthy) MaterialTheme.colorScheme.primary else WarningAmber,
+                                tint = when (state) {
+                                    ChannelState.OK -> MaterialTheme.colorScheme.primary
+                                    ChannelState.IDLE -> MaterialTheme.colorScheme.tertiary
+                                    ChannelState.STALE -> WarningAmber
+                                    ChannelState.DISABLED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    line.label,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (line.detail.isNotBlank()) {
+                                    Text(
+                                        line.detail,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                             Text(
-                                line.label,
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                line.lastBeatAt?.let { TimeUtils.formatDateTime(it) } ?: "从未上报",
+                                "${state.label} · " +
+                                    (line.lastBeatAt?.let { TimeUtils.formatDateTime(it) } ?: "从未上报"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

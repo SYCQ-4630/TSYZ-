@@ -8,6 +8,7 @@ import com.tsyz.autoledger.AppContainer
 import com.tsyz.autoledger.capture.ForegroundGuardService
 import com.tsyz.autoledger.capture.importer.ImportResult
 import com.tsyz.autoledger.core.model.IngestStatus
+import com.tsyz.autoledger.health.HealthChannel
 import com.tsyz.autoledger.core.model.TxType
 import com.tsyz.autoledger.core.util.Money
 import com.tsyz.autoledger.core.util.Sanitizer
@@ -378,6 +379,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     fun setMonthlyReportEnabled(enabled: Boolean) = updateSetting {
         container.settings.setMonthlyReportEnabled(enabled)
         container.scheduler.apply(container.settings.current())
+        if (enabled) container.health.beatNow(HealthChannel.WORKER, "scheduled")
     }
 
     fun setForegroundEnabled(enabled: Boolean) = updateSetting {
@@ -653,7 +655,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             pendingCount = input.pendingCount,
             captureCount = summary?.captureCount ?: 0,
             autoPostedCount = summary?.autoPostedCount ?: 0,
-            health = input.health.map { HealthLine(it.label, it.healthy, it.lastBeatAt) }
+            health = input.health.map { HealthLine(it.label, it.healthy, it.lastBeatAt, it.state, it.detail) }
         )
     }
 

@@ -34,6 +34,7 @@ object ReportCodec {
         }))
         root.put("health", JSONArray(report.health.map {
             JSONObject().put("label", it.label).put("healthy", it.healthy)
+                .put("state", it.state.name).put("detail", it.detail)
                 .put("lastBeatAt", it.lastBeatAt ?: JSONObject.NULL)
         }))
         return root.toString()

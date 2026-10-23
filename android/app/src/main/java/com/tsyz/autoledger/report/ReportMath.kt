@@ -88,7 +88,7 @@ object ReportMath {
             pendingCount = pendingCount,
             captureCount = captureCount,
             autoPostedCount = current.count { it.sourceType != "MANUAL" },
-            health = health.map { HealthLine(it.label, it.healthy, it.lastBeatAt) }
+            health = health.map { HealthLine(it.label, it.healthy, it.lastBeatAt, it.state, it.detail) }
         )
     }
 

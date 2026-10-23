@@ -1,5 +1,7 @@
 package com.tsyz.autoledger.report
 
+import com.tsyz.autoledger.core.model.ChannelState
+
 data class CategoryTotal(val category: String, val amountCents: Long, val ratio: Double)
 
 data class MerchantTotal(val merchant: String, val amountCents: Long, val count: Int)
@@ -20,7 +22,13 @@ data class Anomaly(
 
 data class DailyPoint(val day: String, val expenseCents: Long, val incomeCents: Long)
 
-data class HealthLine(val label: String, val healthy: Boolean, val lastBeatAt: Long?)
+data class HealthLine(
+    val label: String,
+    val healthy: Boolean,
+    val lastBeatAt: Long?,
+    val state: ChannelState = ChannelState.OK,
+    val detail: String = ""
+)
 
 data class ReportSummary(
     val month: String,

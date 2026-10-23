@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.tsyz.autoledger.MainActivity
 import com.tsyz.autoledger.R
+import com.tsyz.autoledger.core.model.ChannelState
 import com.tsyz.autoledger.core.util.Money
 import com.tsyz.autoledger.report.ReportSummary
 
@@ -59,15 +60,18 @@ object Notifications {
         ensureChannels(context)
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         val monthLabel = formatMonth(report.month)
-        val healthText = report.health.joinToString(" · ") {
-            "${it.label}${if (it.healthy) "正常" else "异常"}"
+        val staleChannels = report.health.filter { it.state == ChannelState.STALE }
+        val healthText = if (staleChannels.isEmpty()) {
+            ""
+        } else {
+            staleChannels.joinToString(" · ") { "${it.label}心跳超期" }
         }
         val body = buildString {
             append("收入 ${Money.formatWithSymbol(report.incomeCents)}  ")
             append("支出 ${Money.formatWithSymbol(report.expenseCents)}  ")
             append("结余 ${Money.formatWithSymbol(report.balanceCents)}")
             append("\n本月 ${report.pendingCount} 笔待核对")
-            if (healthText.isNotBlank()) append("\n健康：$healthText")
+            if (healthText.isNotBlank()) append("\n通道提醒：$healthText")
         }
         val notification = NotificationCompat.Builder(context, MONTHLY_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_ledger)

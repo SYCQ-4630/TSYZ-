@@ -79,10 +79,19 @@ data class IngestResult(
     val message: String = ""
 )
 
+/** 通道健康状态：区分“正常”“待首次触发”“心跳超期”“未启用”，避免把空闲误报为故障。 */
+enum class ChannelState(val label: String) {
+    OK("正常"),
+    IDLE("待触发"),
+    STALE("心跳超期"),
+    DISABLED("未启用")
+}
+
 data class ChannelStatus(
     val channel: String,
     val label: String,
     val lastBeatAt: Long?,
     val healthy: Boolean,
-    val detail: String = ""
+    val detail: String = "",
+    val state: ChannelState = ChannelState.OK
 )

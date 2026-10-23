@@ -21,6 +21,9 @@ class BootReceiver : BroadcastReceiver() {
                 val settings = app.container.settings.current()
                 app.container.scheduler.apply(settings)
                 app.container.health.beatNow(HealthChannel.APP, "boot/$action")
+                if (settings.monthlyReportEnabled) {
+                    app.container.health.beatNow(HealthChannel.WORKER, "scheduled")
+                }
                 if (settings.foregroundServiceEnabled &&
                     (action == Intent.ACTION_BOOT_COMPLETED ||
                         action == Intent.ACTION_MY_PACKAGE_REPLACED ||

@@ -34,6 +34,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tsyz.autoledger.core.model.ChannelState
 import com.tsyz.autoledger.permissions.OemGuides
 import com.tsyz.autoledger.permissions.PermissionHelper
 import com.tsyz.autoledger.permissions.SystemPermissionState
@@ -110,11 +111,12 @@ fun ManageScreen(
                 health.forEach { status ->
                     KeyValueRow(
                         status.label,
-                        if (status.healthy) "正常" else "心跳超期",
-                        valueColor = if (status.healthy) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.error
+                        status.state.label,
+                        valueColor = when (status.state) {
+                            ChannelState.OK -> MaterialTheme.colorScheme.primary
+                            ChannelState.IDLE -> MaterialTheme.colorScheme.tertiary
+                            ChannelState.STALE -> MaterialTheme.colorScheme.error
+                            ChannelState.DISABLED -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )
                 }
