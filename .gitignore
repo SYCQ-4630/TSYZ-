@@ -40,3 +40,6 @@ obj/
 *.user
 *.suo
 TestResults/
+
+# 允许提交构建好的调试 APK 供直接安装
+!android/artifacts/app-debug.apk
